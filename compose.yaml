@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    container_name: nexops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-incident_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-incident_lab}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-incident_app} -d ${POSTGRES_DB:-incident_lab}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # --- Observability profile (later phases) ---
+  # prometheus:
+  #   profiles: [observability]
+  #   image: prom/prometheus:v2.54.0
+  #   ...
+
+  # grafana:
+  #   profiles: [observability]
+  #   image: grafana/grafana:11.2.0
+  #   ...
+
+  # jaeger:
+  #   profiles: [observability]
+  #   image: jaegertracing/all-in-one:1.60
+  #   ...
+
+volumes:
+  pgdata:
+    driver: local
