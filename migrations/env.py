@@ -21,11 +21,12 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Import your models' MetaData here for autogenerate support.
-# When domain models are added (Phase 2+), import their Base.metadata:
-#   from app.db.models import Base
-#   target_metadata = Base.metadata
-target_metadata = None
+# Import models so their tables are registered on Base.metadata
+from app.db.base import Base  # noqa: E402
+from app.shopapi.models import Order, OrderItem, Product  # noqa: E402, F401
+from app.shopapi.telemetry_models import TelemetryEvent  # noqa: E402, F401
+
+target_metadata = Base.metadata
 
 # Override the URL from application settings
 settings = get_settings()
