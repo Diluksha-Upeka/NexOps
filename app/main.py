@@ -23,6 +23,9 @@ from app.api.health import router as health_router
 from app.core.logging import setup_logging
 from app.core.settings import get_settings
 from app.db.engine import dispose_engine, init_engine
+from app.shopapi.router import router as shopapi_router
+from app.shopapi.simulator import init_simulator
+from app.shopapi.simulator_router import router as simulator_router
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +51,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Database
     init_engine(settings)
     logger.info("Database engine initialised")
+
+    # Simulator
+    init_simulator(settings)
+    logger.info(
+        "Fault simulator initialised",
+        extra={
+            "structured": {
+                "enabled": settings.simulator_enabled,
+                "max_fault_seconds": settings.simulator_max_fault_seconds,
+            }
+        },
+    )
 
     yield
 
@@ -84,6 +99,11 @@ def create_app() -> FastAPI:
 
     # Routers
     app.include_router(health_router)
+    app.include_router(shopapi_router)
+
+    # Simulator routes — only in development
+    if settings.simulator_enabled and settings.is_development:
+        app.include_router(simulator_router)
 
     return app
 

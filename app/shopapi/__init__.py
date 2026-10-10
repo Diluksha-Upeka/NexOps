@@ -1,1 +1,1 @@
-"""ShopAPI — simulated production service (Phase 1+)."""
+"""ShopAPI — simulated commerce service with fault injection."""
