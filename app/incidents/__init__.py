@@ -1,1 +1,1 @@
-"""Incident lifecycle and simulator (Phase 1+)."""
+"""Incident domain — lifecycle, investigation, evidence, and audit."""

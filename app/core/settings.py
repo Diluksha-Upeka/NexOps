@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # --- Database ---
     database_url: str = Field(
-        default="postgresql+psycopg://incident_app:change-me@localhost:5432/incident_lab",
+        default="postgresql+psycopg://incident_app:change-me@127.0.0.1:5432/incident_lab",
         description="SQLAlchemy async connection string.",
     )
 

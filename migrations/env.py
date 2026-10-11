@@ -23,6 +23,12 @@ if config.config_file_name is not None:
 
 # Import models so their tables are registered on Base.metadata
 from app.db.base import Base  # noqa: E402
+from app.incidents.models import (  # noqa: E402, F401
+    AuditEvent,
+    EvidenceItem,
+    Incident,
+    InvestigationRun,
+)
 from app.shopapi.models import Order, OrderItem, Product  # noqa: E402, F401
 from app.shopapi.telemetry_models import TelemetryEvent  # noqa: E402, F401
 
