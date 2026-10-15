@@ -7,6 +7,7 @@ IncidentService and evidence tools.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -35,6 +36,8 @@ from app.incidents.service import (
     IncidentService,
     InvalidTransitionError,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["incidents"])
 
@@ -126,12 +129,66 @@ async def start_investigation(
     incident_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
 ) -> InvestigationRunResponse:
-    """Start a new investigation run for an incident (returns 202)."""
+    """Start a new investigation run for an incident, running the LangGraph workflow."""
+    from app.graph.workflow import run_investigation
+
     svc = IncidentService(session)
+    incident = await svc.get_incident(incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
     try:
         run = await svc.create_run(incident_id)
     except IncidentNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # Transition run to running
+    await svc.transition_run(run.id, "running")
+
+    incident_dict = {
+        "id": str(incident.id),
+        "title": incident.title,
+        "description": incident.description,
+        "service": incident.service,
+        "severity": incident.severity,
+        "scenario_key": incident.scenario_key,
+        "started_at": incident.started_at.isoformat() if incident.started_at else None,
+    }
+
+    # Execute graph investigation
+    result = await run_investigation(
+        incident=incident_dict,
+        incident_id=str(incident.id),
+        run_id=str(run.id),
+        thread_id=run.thread_id,
+        session=session,
+    )
+
+    # Persist evidence collected by the graph
+    for item in result.get("evidence", []):
+        try:
+            await svc.add_evidence(
+                run_id=run.id,
+                source_type=item.get("source_type", "unknown"),
+                summary=item.get("summary", ""),
+                payload_json=item.get("data"),
+                source_ref=item.get("source_ref"),
+                confidence=item.get("confidence"),
+            )
+        except Exception as exc:
+            logger.warning("Failed to persist evidence item: %s", exc)
+
+    # Transition run to final state based on graph outcome
+    graph_status = result.get("status", "completed")
+    if graph_status == "awaiting_approval":
+        run = await svc.transition_run(run.id, "awaiting_approval")
+    elif graph_status == "insufficient_evidence":
+        run = await svc.transition_run(run.id, "completed")
+    elif graph_status == "failed":
+        run = await svc.transition_run(run.id, "failed")
+    else:
+        run = await svc.transition_run(run.id, "completed")
+
     return InvestigationRunResponse.model_validate(run)
 
 

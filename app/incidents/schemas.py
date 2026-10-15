@@ -110,3 +110,46 @@ class AuditEventResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ── Approval Schemas ──────────────────────────────────────────────────
+
+
+class ApprovalResponse(BaseModel):
+    """Public representation of an approval request record."""
+
+    id: UUID
+    run_id: UUID
+    incident_id: UUID
+    action_type: str
+    action_payload: dict[str, Any] | None
+    status: str
+    risk: str
+    reasoning: str
+    actor: str | None
+    decision_reason: str | None
+    idempotency_key: str | None
+    created_at: datetime
+    decided_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
+class SubmitApprovalRequest(BaseModel):
+    """Request body for POST /api/v1/runs/{id}/approval."""
+
+    decision: str = Field(pattern=r"^(approved|rejected|request_more_evidence)$")
+    actor: str = Field(default="dev-operator", min_length=1, max_length=100)
+    reason: str = Field(default="", max_length=2000)
+    idempotency_key: str = Field(min_length=1, max_length=100)
+
+
+class RunDetailResponse(BaseModel):
+    """Comprehensive investigation run detail with evidence, hypotheses, and approvals."""
+
+    run: InvestigationRunResponse
+    evidence: list[EvidenceItemResponse]
+    hypotheses: list[dict[str, Any]] = Field(default_factory=list)
+    proposed_action: dict[str, Any] | None = None
+    approval: ApprovalResponse | None = None
+    is_awaiting_approval: bool = False

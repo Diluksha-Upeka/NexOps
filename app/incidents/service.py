@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.incidents.models import AuditEvent, EvidenceItem, Incident, InvestigationRun
+from app.incidents.models import Approval, AuditEvent, EvidenceItem, Incident, InvestigationRun
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +294,128 @@ class IncidentService:
         )
         return list(result.scalars().all())
 
+    # ── Approval operations ───────────────────────────────────────────
+
+    async def create_approval(
+        self,
+        *,
+        run_id: uuid.UUID,
+        incident_id: uuid.UUID,
+        action_type: str,
+        action_payload: dict[str, Any] | None = None,
+        risk: str = "low",
+        reasoning: str = "",
+        actor: str = "system",
+    ) -> Approval:
+        """Create a pending approval request for a proposed remediation action."""
+        approval = Approval(
+            run_id=run_id,
+            incident_id=incident_id,
+            action_type=action_type,
+            action_payload=action_payload,
+            status="pending",
+            risk=risk,
+            reasoning=reasoning,
+        )
+        self._session.add(approval)
+        await self._audit(
+            actor=actor,
+            event_type="approval_requested",
+            resource_type="approval",
+            resource_id=str(approval.id),
+            details={
+                "run_id": str(run_id),
+                "incident_id": str(incident_id),
+                "action_type": action_type,
+                "risk": risk,
+            },
+        )
+        await self._session.commit()
+        return approval
+
+    async def get_approval(self, approval_id: uuid.UUID) -> Approval | None:
+        """Fetch an approval by ID."""
+        result = await self._session.execute(select(Approval).where(Approval.id == approval_id))
+        return result.scalar_one_or_none()
+
+    async def get_pending_approval_for_run(self, run_id: uuid.UUID) -> Approval | None:
+        """Fetch the current pending approval request for a run."""
+        result = await self._session.execute(
+            select(Approval)
+            .where(Approval.run_id == run_id, Approval.status == "pending")
+            .order_by(Approval.created_at.desc())
+        )
+        return result.scalars().first()
+
+    async def get_approval_by_idempotency_key(self, key: str) -> Approval | None:
+        """Fetch an approval by idempotency key to prevent duplicate submissions."""
+        result = await self._session.execute(
+            select(Approval).where(Approval.idempotency_key == key)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_approvals_for_run(self, run_id: uuid.UUID) -> list[Approval]:
+        """List all approvals for a run."""
+        result = await self._session.execute(
+            select(Approval).where(Approval.run_id == run_id).order_by(Approval.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def decide_approval(
+        self,
+        approval_id: uuid.UUID,
+        *,
+        decision: str,
+        actor: str,
+        reason: str = "",
+        idempotency_key: str | None = None,
+    ) -> Approval:
+        """Record an operator's decision on a pending approval.
+
+        Valid decisions: 'approved', 'rejected', 'request_more_evidence'.
+        """
+        approval = await self.get_approval(approval_id)
+        if approval is None:
+            raise ApprovalNotFoundError(f"Approval {approval_id} not found")
+
+        # Idempotency check: if already decided with same key and decision, return as-is
+        if idempotency_key and approval.idempotency_key == idempotency_key:
+            return approval
+
+        if approval.status != "pending":
+            raise InvalidApprovalStateError(f"Cannot decide approval in '{approval.status}' state.")
+
+        status_map = {
+            "approved": "approved",
+            "rejected": "rejected",
+            "request_more_evidence": "requested_more_evidence",
+        }
+        new_status = status_map.get(decision)
+        if not new_status:
+            raise ValueError(f"Unknown decision: {decision}")
+
+        approval.status = new_status
+        approval.actor = actor
+        approval.decision_reason = reason
+        approval.decided_at = datetime.now(UTC)
+        if idempotency_key:
+            approval.idempotency_key = idempotency_key
+
+        await self._audit(
+            actor=actor,
+            event_type=f"approval_{new_status}",
+            resource_type="approval",
+            resource_id=str(approval.id),
+            details={
+                "run_id": str(approval.run_id),
+                "decision": decision,
+                "reason": reason,
+                "idempotency_key": idempotency_key,
+            },
+        )
+        await self._session.commit()
+        return approval
+
     # ── Audit ─────────────────────────────────────────────────────────
 
     async def get_audit_trail(
@@ -353,3 +475,11 @@ class RunNotFoundError(Exception):
 
 class InvalidTransitionError(Exception):
     """Raised when a status transition is not allowed."""
+
+
+class ApprovalNotFoundError(Exception):
+    """Raised when an approval is not found."""
+
+
+class InvalidApprovalStateError(Exception):
+    """Raised when an approval decision is invalid for its current state."""
