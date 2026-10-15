@@ -1,18 +1,51 @@
 import { useEffect, useState } from 'react';
-import { fetchHealth, type HealthResponse } from './api';
+import {
+  fetchHealth,
+  fetchIncidents,
+  fetchRun,
+  startInvestigation,
+  submitApproval,
+  type HealthResponse,
+  type Incident,
+  type RunDetail,
+} from './api';
 import './App.css';
 
 function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [run, setRun] = useState<RunDetail | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchHealth()
       .then(setHealth)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+    fetchIncidents().then((result) => setIncidents(result.items)).catch(() => undefined);
   }, []);
+
+  const investigate = async (incident: Incident) => {
+    setActionError(null);
+    try {
+      const started = await startInvestigation(incident.id);
+      setRun(await fetchRun(started.id));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Unable to start investigation');
+    }
+  };
+
+  const decide = async (decision: 'approved' | 'rejected' | 'request_more_evidence') => {
+    if (!run) return;
+    try {
+      await submitApproval(run.id, decision);
+      setRun(await fetchRun(run.id));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Unable to submit decision');
+    }
+  };
 
   return (
     <div className="app">
@@ -88,6 +121,34 @@ function App() {
             <p>All remediation is confined to the local simulator — never touches production.</p>
             <span className="badge">Phase 6</span>
           </div>
+        </section>
+
+        <section className="status-card">
+          <h2>Approval Workbench <span className="badge">Simulated</span></h2>
+          {incidents.length === 0 && <p className="hint">No incidents are available yet.</p>}
+          {incidents.map((incident) => (
+            <div className="status-item" key={incident.id}>
+              <div>
+                <strong>{incident.title}</strong>
+                <p>{incident.severity} · {incident.status}</p>
+              </div>
+              <button onClick={() => investigate(incident)}>Investigate</button>
+            </div>
+          ))}
+          {run?.approval && run.is_awaiting_approval && (
+            <div className="approval-panel">
+              <strong>Human approval required: {run.approval.action_type}</strong>
+              <p>{run.approval.reasoning}</p>
+              <p className="hint">Risk: {run.approval.risk}. No simulator action runs before approval.</p>
+              <div className="approval-actions">
+                <button onClick={() => decide('approved')}>Approve</button>
+                <button onClick={() => decide('rejected')}>Reject</button>
+                <button onClick={() => decide('request_more_evidence')}>Request evidence</button>
+              </div>
+            </div>
+          )}
+          {run && !run.is_awaiting_approval && <p className="hint">Run status: {run.status}</p>}
+          {actionError && <p className="status-error">{actionError}</p>}
         </section>
 
         <footer className="footer">

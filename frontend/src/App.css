@@ -216,6 +216,33 @@ body {
   font-size: 0.85rem;
 }
 
+button {
+  margin-left: auto;
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent-blue);
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+}
+
+button:hover {
+  background: rgba(99, 179, 237, 0.12);
+}
+
+.approval-panel {
+  border: 1px solid var(--accent-amber);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 .status-error p {
   color: var(--accent-red);
 }
