@@ -64,6 +64,19 @@ npm run dev
 
 Frontend available at: http://localhost:5173
 
+## Investigation approval flow
+
+`POST /api/v1/incidents/{id}/investigations` runs the bounded graph against
+the durable PostgreSQL checkpointer. When the graph reaches a remediation
+proposal it pauses before any mutation and creates an approval record.
+`GET /api/v1/runs/{id}` returns the run, cited evidence, and current approval.
+Submit `approved`, `rejected`, or `request_more_evidence` to
+`POST /api/v1/runs/{id}/approval` with an idempotency key.
+
+Progress is replayable over `GET /api/v1/runs/{id}/events`. Pass
+`last_event_id` when reconnecting to receive only events after the last
+sequence number; events are persisted rather than held only in browser memory.
+
 ## Common Commands
 
 | Task | Command |
