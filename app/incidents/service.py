@@ -15,7 +15,14 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.incidents.models import Approval, AuditEvent, EvidenceItem, Incident, InvestigationRun
+from app.incidents.models import (
+    Approval,
+    AuditEvent,
+    EvidenceItem,
+    Incident,
+    InvestigationRun,
+    RunEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +365,38 @@ class IncidentService:
         """List all approvals for a run."""
         result = await self._session.execute(
             select(Approval).where(Approval.run_id == run_id).order_by(Approval.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def append_run_event(
+        self,
+        run_id: uuid.UUID,
+        event_type: str,
+        payload: dict[str, Any] | None = None,
+    ) -> RunEvent:
+        """Append a monotonically sequenced event for SSE replay."""
+        latest = await self._session.execute(
+            select(func.max(RunEvent.sequence)).where(RunEvent.run_id == run_id)
+        )
+        sequence = (latest.scalar_one() or 0) + 1
+        event = RunEvent(
+            run_id=run_id,
+            sequence=sequence,
+            event_type=event_type,
+            payload_json=payload,
+        )
+        self._session.add(event)
+        await self._session.commit()
+        return event
+
+    async def list_run_events(
+        self, run_id: uuid.UUID, *, after_sequence: int = 0
+    ) -> list[RunEvent]:
+        """Return events after a client-provided replay cursor."""
+        result = await self._session.execute(
+            select(RunEvent)
+            .where(RunEvent.run_id == run_id, RunEvent.sequence > after_sequence)
+            .order_by(RunEvent.sequence)
         )
         return list(result.scalars().all())
 

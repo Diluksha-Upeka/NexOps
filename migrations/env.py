@@ -28,6 +28,7 @@ from app.incidents.models import (  # noqa: E402, F401
     EvidenceItem,
     Incident,
     InvestigationRun,
+    RunEvent,
 )
 from app.shopapi.models import Order, OrderItem, Product  # noqa: E402, F401
 from app.shopapi.telemetry_models import TelemetryEvent  # noqa: E402, F401

@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from langchain_core.runnables import RunnableConfig
+from langgraph.types import interrupt
 
 from app.db.engine import get_session_safe
 from app.graph.state import (
@@ -916,6 +917,36 @@ async def propose_remediation_node(
     return {
         "recommendation": recommendation,
         "status": "awaiting_approval",
+    }
+
+
+async def approval_gate_node(state: InvestigationState, config: RunnableConfig) -> dict[str, Any]:
+    """Pause durably until an explicit operator decision is supplied."""
+    recommendation = state.get("recommendation")
+    if not recommendation:
+        return {"approval_status": "rejected", "status": "insufficient_evidence"}
+
+    decision = interrupt(
+        {
+            "kind": "approval_required",
+            "run_id": state.get("run_id"),
+            "incident_id": state.get("incident_id"),
+            "action": recommendation,
+            "message": "A human decision is required before any simulated action can run.",
+        }
+    )
+    if not isinstance(decision, dict) or decision.get("decision") not in {
+        "approved",
+        "rejected",
+        "request_more_evidence",
+    }:
+        raise ValueError("Approval resume value must contain a supported decision.")
+
+    status = decision["decision"]
+    return {
+        "approval_status": status,
+        "approval_decision": decision,
+        "status": "awaiting_approval" if status == "request_more_evidence" else status,
     }
 
 

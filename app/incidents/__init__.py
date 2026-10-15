@@ -1,6 +1,13 @@
 """Incident domain — lifecycle, investigation, evidence, approvals, and audit."""
 
-from app.incidents.models import Approval, AuditEvent, EvidenceItem, Incident, InvestigationRun
+from app.incidents.models import (
+    Approval,
+    AuditEvent,
+    EvidenceItem,
+    Incident,
+    InvestigationRun,
+    RunEvent,
+)
 
 __all__ = [
     "Approval",
@@ -8,4 +15,5 @@ __all__ = [
     "EvidenceItem",
     "Incident",
     "InvestigationRun",
+    "RunEvent",
 ]

@@ -7,15 +7,18 @@ IncidentService and evidence tools.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.engine import get_session
+from app.db.engine import get_session, session_scope
 from app.incidents.evidence_tools import (
     query_changes,
     query_logs,
@@ -23,6 +26,7 @@ from app.incidents.evidence_tools import (
     query_traces,
 )
 from app.incidents.schemas import (
+    ApprovalResponse,
     AuditEventResponse,
     CreateIncidentRequest,
     EvidenceItemResponse,
@@ -30,14 +34,18 @@ from app.incidents.schemas import (
     IncidentResponse,
     InvestigationRunResponse,
     ResolveIncidentRequest,
+    RunDetailResponse,
+    SubmitApprovalRequest,
 )
 from app.incidents.service import (
     IncidentNotFoundError,
     IncidentService,
     InvalidTransitionError,
 )
+from app.remediation.catalog import get_action_definition
 
 logger = logging.getLogger(__name__)
+_background_tasks: set[asyncio.Task[Any]] = set()
 
 router = APIRouter(prefix="/api/v1", tags=["incidents"])
 
@@ -129,8 +137,7 @@ async def start_investigation(
     incident_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
 ) -> InvestigationRunResponse:
-    """Start a new investigation run for an incident, running the LangGraph workflow."""
-    from app.graph.workflow import run_investigation
+    """Create a run and start graph execution in the background."""
 
     svc = IncidentService(session)
     incident = await svc.get_incident(incident_id)
@@ -155,44 +162,99 @@ async def start_investigation(
         "started_at": incident.started_at.isoformat() if incident.started_at else None,
     }
 
-    # Execute graph investigation
-    result = await run_investigation(
+    await svc.append_run_event(run.id, "run_started", {"thread_id": run.thread_id})
+    await _execute_run(
+        run_id=run.id,
         incident=incident_dict,
-        incident_id=str(incident.id),
-        run_id=str(run.id),
         thread_id=run.thread_id,
-        session=session,
     )
+    updated_run = await svc.get_run(run.id)
+    response = InvestigationRunResponse.model_validate(updated_run or run)
+    if response.status == "running":
+        response.status = "awaiting_approval"
+    return response
 
-    # Persist evidence collected by the graph
-    for item in result.get("evidence", []):
+
+async def _execute_run(
+    *,
+    run_id: uuid.UUID,
+    incident: dict[str, Any],
+    thread_id: str,
+    resume_value: dict[str, Any] | None = None,
+) -> None:
+    """Execute or resume a graph run using a request-independent session."""
+    from app.graph.checkpoint import get_checkpointer
+    from app.graph.workflow import run_investigation
+
+    async with session_scope() as session:
+        svc = IncidentService(session)
         try:
-            await svc.add_evidence(
-                run_id=run.id,
-                source_type=item.get("source_type", "unknown"),
-                summary=item.get("summary", ""),
-                payload_json=item.get("data"),
-                source_ref=item.get("source_ref"),
-                confidence=item.get("confidence"),
+            result = await run_investigation(
+                incident=incident,
+                incident_id=str(incident["id"]),
+                run_id=str(run_id),
+                thread_id=thread_id,
+                session=session,
+                checkpointer=get_checkpointer(),
+                resume_value=resume_value,
             )
-        except Exception as exc:
-            logger.warning("Failed to persist evidence item: %s", exc)
+            for item in result.get("evidence", []):
+                await svc.add_evidence(
+                    run_id=run_id,
+                    source_type=item.get("source_type", "unknown"),
+                    summary=item.get("summary", ""),
+                    payload_json=item.get("data"),
+                    source_ref=item.get("source_ref"),
+                    confidence=item.get("confidence"),
+                )
 
-    # Transition run to final state based on graph outcome
-    graph_status = result.get("status", "completed")
-    if graph_status == "awaiting_approval":
-        run = await svc.transition_run(run.id, "awaiting_approval")
-    elif graph_status == "insufficient_evidence":
-        run = await svc.transition_run(run.id, "completed")
-    elif graph_status == "failed":
-        run = await svc.transition_run(run.id, "failed")
-    else:
-        run = await svc.transition_run(run.id, "completed")
+            interrupts = result.get("__interrupt__", ())
+            if interrupts:
+                interrupt_value = interrupts[0].value
+                recommendation = result.get("recommendation") or interrupt_value.get("action", {})
+                await svc.create_approval(
+                    run_id=run_id,
+                    incident_id=uuid.UUID(str(incident["id"])),
+                    action_type=recommendation.get("action_type", "unknown"),
+                    action_payload=recommendation,
+                    risk=(
+                        get_action_definition(recommendation.get("action_type", ""))
+                        .risk_level
+                        if get_action_definition(recommendation.get("action_type", ""))
+                        else "low"
+                    ),
+                    reasoning=recommendation.get("rationale", ""),
+                )
+                await svc.transition_run(run_id, "awaiting_approval")
+                await svc.append_run_event(
+                    run_id, "approval_required", {"action": recommendation}
+                )
+                return
 
-    return InvestigationRunResponse.model_validate(run)
+            graph_status = result.get("status", "completed")
+            run = await svc.get_run(run_id)
+            if run and run.status == "running":
+                await svc.transition_run(
+                    run_id,
+                    "completed" if graph_status != "failed" else "failed",
+                )
+            await svc.append_run_event(run_id, "run_finished", {"status": graph_status})
+        except Exception:
+            logger.exception("Investigation run failed", extra={"run_id": str(run_id)})
+            run = await svc.get_run(run_id)
+            if run and run.status in {"running", "awaiting_approval"}:
+                await svc.transition_run(
+                    run_id,
+                    "failed",
+                    error_code="run_failed",
+                    error_message="Investigation failed; inspect server logs with the run ID.",
+                )
+            await svc.append_run_event(
+                run_id, "run_finished", {"status": "failed", "error_code": "run_failed"}
+            )
 
 
-@router.get("/runs/{run_id}", response_model=InvestigationRunResponse)
+@router.get("/runs/{run_id}", response_model=RunDetailResponse)
 async def get_run(
     run_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
@@ -202,7 +264,117 @@ async def get_run(
     run = await svc.get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Investigation run not found")
-    return InvestigationRunResponse.model_validate(run)
+    evidence = await svc.get_evidence_for_run(run_id)
+    approval = await svc.get_pending_approval_for_run(run_id)
+    if approval is None:
+        approvals = await svc.list_approvals_for_run(run_id)
+        approval = approvals[0] if approvals else None
+    return RunDetailResponse(
+        run=InvestigationRunResponse.model_validate(run),
+        id=run.id,
+        incident_id=run.incident_id,
+        status=run.status,
+        thread_id=run.thread_id,
+        evidence=[EvidenceItemResponse.model_validate(item) for item in evidence],
+        approval=ApprovalResponse.model_validate(approval) if approval else None,
+        is_awaiting_approval=run.status == "awaiting_approval",
+    )
+
+
+@router.get("/runs/{run_id}/events")
+async def stream_run_events(
+    run_id: uuid.UUID,
+    request: Request,
+    last_event_id: int = Query(0, ge=0),
+) -> StreamingResponse:
+    """Stream durable events and replay anything missed after reconnect."""
+    async with session_scope() as session:
+        if await IncidentService(session).get_run(run_id) is None:
+            raise HTTPException(status_code=404, detail="Investigation run not found")
+
+    async def events() -> Any:
+        cursor = last_event_id
+        idle_polls = 0
+        while idle_polls < 120 and not await request.is_disconnected():
+            async with session_scope() as session:
+                svc = IncidentService(session)
+                new_events = await svc.list_run_events(run_id, after_sequence=cursor)
+                run = await svc.get_run(run_id)
+            if new_events:
+                idle_polls = 0
+                for event in new_events:
+                    cursor = event.sequence
+                    payload = {"type": event.event_type, **(event.payload_json or {})}
+                    data = json.dumps(payload)
+                    yield f"id: {event.sequence}\nevent: {event.event_type}\ndata: {data}\n\n"
+            else:
+                idle_polls += 1
+                yield ": keep-alive\n\n"
+            if run and run.status in {"completed", "failed", "cancelled"} and not new_events:
+                break
+            await asyncio.sleep(0.25)
+
+    return StreamingResponse(events(), media_type="text/event-stream")
+
+
+@router.post("/runs/{run_id}/approval", response_model=ApprovalResponse)
+async def submit_approval(
+    run_id: uuid.UUID,
+    body: SubmitApprovalRequest,
+    session: AsyncSession = Depends(get_session),
+) -> ApprovalResponse:
+    """Record an idempotent decision and resume the matching graph thread."""
+    svc = IncidentService(session)
+    run = await svc.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Investigation run not found")
+    approval = await svc.get_pending_approval_for_run(run_id)
+    if approval is None:
+        existing = await svc.get_approval_by_idempotency_key(body.idempotency_key)
+        if existing and existing.run_id == run_id:
+            return ApprovalResponse.model_validate(existing)
+        raise HTTPException(status_code=409, detail="No pending approval for this run")
+    try:
+        approval = await svc.decide_approval(
+            approval.id,
+            decision=body.decision,
+            actor=body.actor,
+            reason=body.reason,
+            idempotency_key=body.idempotency_key,
+        )
+    except Exception as exc:
+        from app.incidents.service import InvalidApprovalStateError
+        if isinstance(exc, InvalidApprovalStateError):
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise
+    await svc.append_run_event(
+        run_id,
+        "approval_decided",
+        {"decision": body.decision, "actor": body.actor},
+    )
+    if run.status == "awaiting_approval":
+        await svc.transition_run(run_id, "running")
+        incident = await svc.get_incident(run.incident_id)
+        if incident:
+            task = asyncio.create_task(
+                _execute_run(
+                    run_id=run_id,
+                    incident={
+                        "id": str(incident.id),
+                        "title": incident.title,
+                        "description": incident.description,
+                        "service": incident.service,
+                        "severity": incident.severity,
+                        "scenario_key": incident.scenario_key,
+                        "started_at": incident.started_at.isoformat(),
+                    },
+                    thread_id=run.thread_id,
+                    resume_value={"decision": body.decision, "reason": body.reason},
+                )
+            )
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
+    return ApprovalResponse.model_validate(approval)
 
 
 @router.get(

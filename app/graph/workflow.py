@@ -21,9 +21,11 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import Command
 
 from app.graph.nodes import (
     analyze_root_cause_node,
+    approval_gate_node,
     finalize_node,
     insufficient_evidence_report_node,
     investigate_changes_node,
@@ -70,6 +72,7 @@ def build_investigation_graph(
     workflow.add_node("refine_plan", refine_plan_node)
     workflow.add_node("propose_remediation", propose_remediation_node)
     workflow.add_node("insufficient_evidence_report", insufficient_evidence_report_node)
+    workflow.add_node("approval_gate", approval_gate_node)
     workflow.add_node("finalize", finalize_node)
 
     # ── Edges ─────────────────────────────────────────────────────────
@@ -110,7 +113,15 @@ def build_investigation_graph(
     workflow.add_edge("refine_plan", "investigate_changes")
 
     # Finalize and exit
-    workflow.add_edge("propose_remediation", "finalize")
+    workflow.add_edge("propose_remediation", "approval_gate")
+    workflow.add_conditional_edges(
+        "approval_gate",
+        lambda state: {
+            "approved": "finalize",
+            "rejected": "finalize",
+            "requested_more_evidence": "refine_plan",
+        }.get(state.get("approval_status", "rejected"), "finalize"),
+    )
     workflow.add_edge("insufficient_evidence_report", "finalize")
     workflow.add_edge("finalize", END)
 
@@ -140,6 +151,7 @@ async def run_investigation(
     session: Any = None,
     checkpointer: BaseCheckpointSaver[Any] | None = None,
     mock_errors: dict[str, str] | None = None,
+    resume_value: dict[str, Any] | None = None,
 ) -> InvestigationState:
     """Execute the investigation workflow asynchronously and return the final state."""
     graph = (
@@ -179,5 +191,6 @@ async def run_investigation(
         "recursion_limit": 30,
     }
 
-    result = await graph.ainvoke(initial_state, config=config)
+    command: Any = Command(resume=resume_value) if resume_value is not None else initial_state
+    result = await graph.ainvoke(command, config=config)
     return cast(InvestigationState, result)

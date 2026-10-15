@@ -148,8 +148,25 @@ class RunDetailResponse(BaseModel):
     """Comprehensive investigation run detail with evidence, hypotheses, and approvals."""
 
     run: InvestigationRunResponse
+    id: UUID
+    incident_id: UUID
+    status: str
+    thread_id: str
     evidence: list[EvidenceItemResponse]
     hypotheses: list[dict[str, Any]] = Field(default_factory=list)
     proposed_action: dict[str, Any] | None = None
     approval: ApprovalResponse | None = None
     is_awaiting_approval: bool = False
+
+
+class RunEventResponse(BaseModel):
+    """A reconnectable investigation progress event."""
+
+    id: UUID
+    run_id: UUID
+    sequence: int
+    event_type: str
+    payload_json: dict[str, Any] | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

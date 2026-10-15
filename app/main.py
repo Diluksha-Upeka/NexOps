@@ -23,6 +23,7 @@ from app.api.health import router as health_router
 from app.core.logging import setup_logging
 from app.core.settings import get_settings
 from app.db.engine import dispose_engine, init_engine
+from app.graph.checkpoint import close_checkpointer, init_checkpointer
 from app.incidents.router import router as incidents_router
 from app.shopapi.router import router as shopapi_router
 from app.shopapi.simulator import init_simulator
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Database
     init_engine(settings)
     logger.info("Database engine initialised")
+    await init_checkpointer(settings)
 
     # Simulator
     init_simulator(settings)
@@ -69,6 +71,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Shutdown
     await dispose_engine()
+    await close_checkpointer()
     logger.info("Database engine disposed — shutdown complete")
 
 

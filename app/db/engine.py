@@ -8,6 +8,7 @@ conservatively for local development.
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -56,6 +57,15 @@ async def get_session_safe() -> AsyncGenerator[AsyncSession, None]:
     """
     if _session_factory is None:
         return
+    async with _session_factory() as session:
+        yield session
+
+
+@asynccontextmanager
+async def session_scope() -> AsyncGenerator[AsyncSession, None]:
+    """Open an application session for work detached from an HTTP request."""
+    if _session_factory is None:
+        raise RuntimeError("Database engine not initialised — call init_engine() first.")
     async with _session_factory() as session:
         yield session
 
