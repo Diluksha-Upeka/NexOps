@@ -209,26 +209,27 @@ async def _execute_run(
                 )
 
             interrupts = result.get("__interrupt__", ())
-            if interrupts:
-                interrupt_value = interrupts[0].value
-                recommendation = result.get("recommendation") or interrupt_value.get("action", {})
+            if interrupts and isinstance(interrupts, (tuple, list)):
+                first_int = interrupts[0]
+                val = getattr(first_int, "value", None) or (
+                    first_int if isinstance(first_int, dict) else {}
+                )
+                raw_rec = result.get("recommendation") or (val.get("action") if isinstance(val, dict) else {})
+                rec_dict: dict[str, Any] = dict(raw_rec) if isinstance(raw_rec, dict) else {}
+                action_type = str(rec_dict.get("action_type", "unknown"))
+                action_def = get_action_definition(action_type)
+                risk_level = action_def.risk_level if action_def else "low"
+
                 await svc.create_approval(
                     run_id=run_id,
                     incident_id=uuid.UUID(str(incident["id"])),
-                    action_type=recommendation.get("action_type", "unknown"),
-                    action_payload=recommendation,
-                    risk=(
-                        get_action_definition(recommendation.get("action_type", ""))
-                        .risk_level
-                        if get_action_definition(recommendation.get("action_type", ""))
-                        else "low"
-                    ),
-                    reasoning=recommendation.get("rationale", ""),
+                    action_type=action_type,
+                    action_payload=rec_dict,
+                    risk=risk_level,
+                    reasoning=str(rec_dict.get("rationale", "")),
                 )
                 await svc.transition_run(run_id, "awaiting_approval")
-                await svc.append_run_event(
-                    run_id, "approval_required", {"action": recommendation}
-                )
+                await svc.append_run_event(run_id, "approval_required", {"action": rec_dict})
                 return
 
             graph_status = result.get("status", "completed")
@@ -258,7 +259,7 @@ async def _execute_run(
 async def get_run(
     run_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
-) -> InvestigationRunResponse:
+) -> RunDetailResponse:
     """Get a single investigation run by ID."""
     svc = IncidentService(session)
     run = await svc.get_run(run_id)
@@ -344,6 +345,7 @@ async def submit_approval(
         )
     except Exception as exc:
         from app.incidents.service import InvalidApprovalStateError
+
         if isinstance(exc, InvalidApprovalStateError):
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         raise
