@@ -24,6 +24,8 @@ from app.graph.state import (
     InvestigationState,
     InvestigationTask,
     Recommendation,
+    RemediationOutcome,
+    VerificationOutcome,
 )
 from app.incidents.evidence_tools import (
     ToolResult,
@@ -33,7 +35,17 @@ from app.incidents.evidence_tools import (
     query_traces,
 )
 from app.llm import get_llm_adapter
+from app.observability import (
+    get_current_trace_id,
+    record_evidence_collected,
+    record_investigation_run,
+    record_remediation_action,
+    set_correlation_context,
+)
 from app.remediation.catalog import map_cause_to_action
+from app.remediation.executor import SandboxExecutor
+from app.remediation.verification import verify_remediation as run_verification
+from app.shopapi.simulator import get_simulator
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +63,16 @@ async def load_incident_node(state: InvestigationState, config: RunnableConfig) 
     run_id = state.get("run_id") or str(uuid.uuid4())
     thread_id = state.get("thread_id") or f"thread-{run_id[:12]}"
     max_rounds = state.get("max_investigation_rounds") or 2
+    trace_id = state.get("trace_id") or get_current_trace_id() or uuid.uuid4().hex
+
+    # Set distributed correlation context for this run
+    set_correlation_context(run_id=run_id, trace_id=trace_id)
 
     return {
         "incident_id": incident_id,
         "run_id": run_id,
         "thread_id": thread_id,
+        "trace_id": trace_id,
         "incident": incident,
         "investigation_round": 1,
         "max_investigation_rounds": max_rounds,
@@ -579,6 +596,9 @@ async def synthesize_evidence_node(
     errors = state.get("errors", [])
 
     sources_present = {item.get("source_type") for item in evidence_items}
+    for item in evidence_items:
+        record_evidence_collected(item.get("source_type", "unknown"))
+
     logger.info(
         "Synthesized evidence: %d items across sources %s (branch errors: %d)",
         len(evidence_items),
@@ -974,6 +994,7 @@ async def finalize_node(state: InvestigationState, config: RunnableConfig) -> di
     """Build the final investigation report."""
     incident_id = state.get("incident_id", "")
     run_id = state.get("run_id", "")
+    incident = state.get("incident") or {}
     status = state.get("status", "completed")
     hypotheses = state.get("hypotheses", [])
     top_hypothesis = hypotheses[0] if hypotheses else None
@@ -981,8 +1002,42 @@ async def finalize_node(state: InvestigationState, config: RunnableConfig) -> di
     evidence_count = len(state.get("evidence", []))
     recommendation = state.get("recommendation")
     missing_evidence = state.get("missing_evidence", [])
+    remediation_result = state.get("remediation_result")
+    verification_result = state.get("verification_result")
 
-    if status == "awaiting_approval" and top_hypothesis:
+    top_title = top_hypothesis.get("title") if top_hypothesis else "Simulated fault"
+
+    # Build contextual summary
+    if verification_result and verification_result.get("outcome") == "resolved":
+        action_name = recommendation.get("action_type") if recommendation else "unknown"
+        summary = (
+            f"Investigation and remediation completed successfully. "
+            f"Diagnosed '{top_title}' "
+            f"({confidence:.0%} confidence, {evidence_count} evidence items). "
+            f"Action '{action_name}' applied and verified. "
+            f"Incident can be resolved."
+        )
+    elif verification_result and verification_result.get("outcome") == "mitigated":
+        action_name = recommendation.get("action_type") if recommendation else "unknown"
+        summary = (
+            f"Remediation partially successful. "
+            f"Action '{action_name}' cleared the target fault, "
+            f"but additional active faults remain. Incident is mitigated."
+        )
+    elif verification_result and verification_result.get("outcome") == "failed":
+        summary = (
+            f"Remediation verification failed. "
+            f"{verification_result.get('summary', 'The target fault persists.')} "
+            f"Manual intervention recommended."
+        )
+    elif remediation_result and not remediation_result.get("success"):
+        denial = remediation_result.get("denial_reason") or remediation_result.get(
+            "error_message", ""
+        )
+        summary = (
+            f"Remediation action was denied or failed. Reason: {denial}. Incident remains open."
+        )
+    elif status == "awaiting_approval" and top_hypothesis:
         action_name = recommendation.get("action_type") if recommendation else "none"
         summary = (
             f"Investigation concluded with diagnosis: {top_hypothesis.get('title')} "
@@ -1008,6 +1063,222 @@ async def finalize_node(state: InvestigationState, config: RunnableConfig) -> di
         summary=summary,
         recommendation=recommendation,
         missing_evidence=missing_evidence,
+        remediation_result=remediation_result,
+        verification_result=verification_result,
+        trace_id=state.get("trace_id"),
+    )
+
+    record_investigation_run(
+        service=str(incident.get("service") or "shopapi"),
+        status=status,
+        duration_seconds=1.0,
     )
 
     return {"final_report": final_report}
+
+
+# ── Node 11: execute_remediation ──────────────────────────────────────
+
+
+async def execute_remediation_node(
+    state: InvestigationState, config: RunnableConfig
+) -> dict[str, Any]:
+    """Execute the approved remediation action via the sandbox executor.
+
+    This node only runs when the approval gate returns 'approved'.
+    It re-validates all policy preconditions before mutating simulator state.
+    """
+    recommendation = state.get("recommendation")
+    approval_status = state.get("approval_status")
+    incident_id = state.get("incident_id", "")
+    run_id = state.get("run_id", "")
+
+    if not recommendation or approval_status != "approved":
+        err = GraphError(
+            node="execute_remediation",
+            error_code="missing_approval_or_recommendation",
+            message="Cannot execute remediation without approval and recommendation.",
+            retryable=False,
+        )
+        return {
+            "errors": [err],
+            "status": "failed",
+            "remediation_result": RemediationOutcome(
+                success=False,
+                action_type="unknown",
+                idempotency_key="",
+                executed_at=datetime.now(UTC).isoformat(),
+                status="denied",
+                denial_code="missing_approval_or_recommendation",
+                denial_reason="No approved recommendation to execute.",
+            ),
+        }
+
+    action_type = recommendation.get("action_type", "")
+    parameters = recommendation.get("parameters", {})
+
+    configurable = (config or {}).get("configurable", {})
+
+    # Get simulator — either from config (tests) or global singleton
+    simulator = configurable.get("simulator")
+    if simulator is None:
+        try:
+            simulator = get_simulator()
+        except RuntimeError:
+            err = GraphError(
+                node="execute_remediation",
+                error_code="simulator_unavailable",
+                message="Simulator not initialised.",
+                retryable=False,
+            )
+            return {
+                "errors": [err],
+                "status": "failed",
+                "remediation_result": RemediationOutcome(
+                    success=False,
+                    action_type=action_type,
+                    idempotency_key="",
+                    executed_at=datetime.now(UTC).isoformat(),
+                    status="failed",
+                    error_message="Simulator not initialised.",
+                ),
+            }
+
+    # Get settings from config or defaults
+    simulator_enabled = configurable.get("simulator_enabled", True)
+    is_development = configurable.get("is_development", True)
+
+    executor = SandboxExecutor(simulator)
+    result = executor.execute(
+        action_type=action_type,
+        parameters=parameters,
+        approval_status=approval_status,
+        approval_incident_id=incident_id,
+        approval_run_id=run_id,
+        current_incident_id=incident_id,
+        current_run_id=run_id,
+        incident_status="awaiting_approval",
+        simulator_enabled=simulator_enabled,
+        is_development=is_development,
+    )
+
+    remediation_outcome = RemediationOutcome(
+        success=result.success,
+        action_type=result.action_type,
+        idempotency_key=result.idempotency_key,
+        executed_at=result.executed_at,
+        status=result.status,
+        details=result.details,
+        denial_code=result.denial_code,
+        denial_reason=result.denial_reason,
+        error_message=result.error_message,
+        rollback_instruction=result.rollback_instruction,
+    )
+
+    record_remediation_action(action_type=action_type, status=result.status)
+
+    if result.success:
+        return {
+            "remediation_result": remediation_outcome,
+            "status": "remediating",
+        }
+    else:
+        err = GraphError(
+            node="execute_remediation",
+            error_code=result.denial_code or "execution_failed",
+            message=result.denial_reason or result.error_message or "Remediation failed.",
+            retryable=False,
+        )
+        return {
+            "errors": [err],
+            "remediation_result": remediation_outcome,
+            "status": "failed",
+        }
+
+
+# ── Node 12: verify_remediation ───────────────────────────────────────
+
+
+async def verify_remediation_node(
+    state: InvestigationState, config: RunnableConfig
+) -> dict[str, Any]:
+    """Post-action verification: check simulator state and determine incident outcome."""
+    remediation_result_state = state.get("remediation_result")
+    recommendation = state.get("recommendation")
+
+    if not remediation_result_state:
+        return {
+            "status": "failed",
+            "verification_result": VerificationOutcome(
+                passed=False,
+                outcome="failed",
+                checks=[],
+                summary="No remediation result to verify.",
+                verified_at=datetime.now(UTC).isoformat(),
+                recommended_incident_status="open",
+            ),
+        }
+
+    action_type = remediation_result_state.get("action_type", "")
+    parameters = recommendation.get("parameters", {}) if recommendation else {}
+
+    configurable = (config or {}).get("configurable", {})
+    simulator = configurable.get("simulator")
+    if simulator is None:
+        try:
+            simulator = get_simulator()
+        except RuntimeError:
+            return {
+                "status": "failed",
+                "verification_result": VerificationOutcome(
+                    passed=False,
+                    outcome="inconclusive",
+                    checks=[],
+                    summary="Simulator unavailable for verification.",
+                    verified_at=datetime.now(UTC).isoformat(),
+                    recommended_incident_status="open",
+                ),
+            }
+
+    # Reconstruct ExecutionResult from state for verification
+    from app.remediation.executor import ExecutionResult as ExecResult
+
+    exec_result = ExecResult(
+        success=remediation_result_state.get("success", False),
+        action_type=remediation_result_state.get("action_type", ""),
+        idempotency_key=remediation_result_state.get("idempotency_key", ""),
+        executed_at=remediation_result_state.get("executed_at", ""),
+        status=remediation_result_state.get("status", "failed"),
+        details=remediation_result_state.get("details", {}),
+        error_message=remediation_result_state.get("error_message"),
+    )
+
+    verification = run_verification(
+        execution_result=exec_result,
+        simulator=simulator,
+        action_type=action_type,
+        parameters=parameters,
+    )
+
+    verification_outcome = VerificationOutcome(
+        passed=verification.passed,
+        outcome=verification.outcome,
+        checks=verification.checks,
+        summary=verification.summary,
+        verified_at=verification.verified_at,
+        recommended_incident_status=verification.recommended_incident_status,
+    )
+
+    # Map verification outcome to graph status
+    status_map = {
+        "resolved": "completed",
+        "mitigated": "completed",
+        "failed": "failed",
+        "inconclusive": "failed",
+    }
+    new_status = status_map.get(verification.outcome, "failed")
+
+    return {
+        "verification_result": verification_outcome,
+        "status": new_status,
+    }

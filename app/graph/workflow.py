@@ -6,9 +6,14 @@ Wires:
   -> synthesize_evidence (Fan-in)
   -> analyze_root_cause
   -> route_sufficiency:
-       "sufficient"        -> propose_remediation -> finalize -> END
+       "sufficient"        -> propose_remediation -> approval_gate
        "needs_refinement"  -> refine_plan -> [evidence branches...] (Bounded loop)
        "insufficient"      -> insufficient_evidence_report -> finalize -> END
+
+  approval_gate:
+       "approved"                 -> execute_remediation -> verify_remediation -> finalize -> END
+       "rejected"                 -> finalize -> END
+       "requested_more_evidence"  -> refine_plan -> [evidence branches...] (Bounded loop)
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ from langgraph.types import Command
 from app.graph.nodes import (
     analyze_root_cause_node,
     approval_gate_node,
+    execute_remediation_node,
     finalize_node,
     insufficient_evidence_report_node,
     investigate_changes_node,
@@ -39,6 +45,7 @@ from app.graph.nodes import (
     route_sufficiency,
     synthesize_evidence_node,
     triage_node,
+    verify_remediation_node,
 )
 from app.graph.state import InvestigationState
 
@@ -73,6 +80,10 @@ def build_investigation_graph(
     workflow.add_node("propose_remediation", propose_remediation_node)
     workflow.add_node("insufficient_evidence_report", insufficient_evidence_report_node)
     workflow.add_node("approval_gate", approval_gate_node)
+
+    # 5. Phase 6: Remediation execution and verification nodes
+    workflow.add_node("execute_remediation", execute_remediation_node)
+    workflow.add_node("verify_remediation", verify_remediation_node)
     workflow.add_node("finalize", finalize_node)
 
     # ── Edges ─────────────────────────────────────────────────────────
@@ -112,16 +123,27 @@ def build_investigation_graph(
     workflow.add_edge("refine_plan", "investigate_traces")
     workflow.add_edge("refine_plan", "investigate_changes")
 
-    # Finalize and exit
+    # Propose -> Approval gate
     workflow.add_edge("propose_remediation", "approval_gate")
+
+    # Approval gate routing:
+    #   approved -> execute_remediation -> verify_remediation -> finalize
+    #   rejected -> finalize
+    #   requested_more_evidence -> refine_plan (bounded)
     workflow.add_conditional_edges(
         "approval_gate",
         lambda state: {
-            "approved": "finalize",
+            "approved": "execute_remediation",
             "rejected": "finalize",
             "requested_more_evidence": "refine_plan",
         }.get(state.get("approval_status", "rejected"), "finalize"),
     )
+
+    # Phase 6 remediation chain
+    workflow.add_edge("execute_remediation", "verify_remediation")
+    workflow.add_edge("verify_remediation", "finalize")
+
+    # Terminal edges
     workflow.add_edge("insufficient_evidence_report", "finalize")
     workflow.add_edge("finalize", END)
 
