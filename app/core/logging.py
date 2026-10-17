@@ -1,8 +1,9 @@
-"""Structured JSON logging configuration.
+"""Structured JSON logging configuration with distributed trace correlation.
 
 Sets up Python's standard logging with JSON-formatted output so that
-every log line is machine-parseable from the start. Secrets and large
-payloads should never be passed to log calls.
+every log line is machine-parseable and correlated with active HTTP requests,
+LangGraph investigation runs, and OpenTelemetry trace spans.
+Secrets and large payloads are never passed to log calls.
 """
 
 from __future__ import annotations
@@ -13,9 +14,18 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
+from opentelemetry import trace
+
+from app.observability.context import (
+    request_id_var,
+    run_id_var,
+    span_id_var,
+    trace_id_var,
+)
+
 
 class JSONFormatter(logging.Formatter):
-    """Emit each log record as a single JSON line."""
+    """Emit each log record as a single JSON line with correlation metadata."""
 
     def format(self, record: logging.LogRecord) -> str:
         log_entry: dict[str, Any] = {
@@ -24,12 +34,38 @@ class JSONFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+
+        # Correlate with active OpenTelemetry span
+        span = trace.get_current_span()
+        ctx = span.get_span_context() if span else None
+        if ctx and ctx.is_valid:
+            log_entry["trace_id"] = format(ctx.trace_id, "032x")
+            log_entry["span_id"] = format(ctx.span_id, "016x")
+        else:
+            tid = trace_id_var.get()
+            sid = span_id_var.get()
+            if tid:
+                log_entry["trace_id"] = tid
+            if sid:
+                log_entry["span_id"] = sid
+
+        # Correlate with active request and investigation run
+        req_id = request_id_var.get()
+        if req_id:
+            log_entry["request_id"] = req_id
+
+        r_id = run_id_var.get()
+        if r_id:
+            log_entry["run_id"] = r_id
+
         if record.exc_info and record.exc_info[1] is not None:
             log_entry["exception"] = self.formatException(record.exc_info)
+
         # Allow extra structured fields via `extra={"structured": {...}}`
         structured: dict[str, Any] | None = getattr(record, "structured", None)
         if structured:
             log_entry["details"] = structured
+
         return json.dumps(log_entry, default=str)
 
 
