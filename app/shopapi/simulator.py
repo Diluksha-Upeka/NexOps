@@ -229,6 +229,13 @@ class SimulatorState:
                 }
             )
 
+        try:
+            from app.observability.metrics import set_simulator_fault_state
+
+            set_simulator_fault_state(key.value, True)
+        except Exception:
+            pass
+
         logger.info(
             "Scenario started",
             extra={
@@ -247,6 +254,13 @@ class SimulatorState:
         fault = self._active_faults.pop(key, None)
         if fault is None:
             raise ValueError(f"Scenario {key.value!r} is not active.")
+
+        try:
+            from app.observability.metrics import set_simulator_fault_state
+
+            set_simulator_fault_state(key.value, False)
+        except Exception:
+            pass
 
         logger.info(
             "Scenario stopped",
@@ -279,6 +293,13 @@ class SimulatorState:
         """Stop all active scenarios. Returns count of stopped faults."""
         self._cleanup_expired()
         count = len(self._active_faults)
+        for key in list(self._active_faults.keys()):
+            try:
+                from app.observability.metrics import set_simulator_fault_state
+
+                set_simulator_fault_state(key.value, False)
+            except Exception:
+                pass
         self._active_faults.clear()
         if count:
             logger.info(f"Stopped all {count} active scenarios")
@@ -293,6 +314,12 @@ class SimulatorState:
                 extra={"structured": {"scenario": key.value}},
             )
             self._active_faults.pop(key, None)
+            try:
+                from app.observability.metrics import set_simulator_fault_state
+
+                set_simulator_fault_state(key.value, False)
+            except Exception:
+                pass
 
 
 # ── Module-level singleton ────────────────────────────────────────────
