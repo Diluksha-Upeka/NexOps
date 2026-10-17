@@ -70,6 +70,32 @@ class GraphError(TypedDict, total=False):
     retryable: bool
 
 
+class RemediationOutcome(TypedDict, total=False):
+    """Typed result of a sandbox remediation execution."""
+
+    success: bool
+    action_type: str
+    idempotency_key: str
+    executed_at: str
+    status: str  # "success" | "denied" | "failed" | "no_op"
+    details: dict[str, Any]
+    denial_code: str | None
+    denial_reason: str | None
+    error_message: str | None
+    rollback_instruction: str | None
+
+
+class VerificationOutcome(TypedDict, total=False):
+    """Typed result of post-action verification."""
+
+    passed: bool
+    outcome: str  # "resolved" | "mitigated" | "failed" | "inconclusive"
+    checks: list[dict[str, Any]]
+    summary: str
+    verified_at: str
+    recommended_incident_status: str
+
+
 class FinalReport(TypedDict, total=False):
     """A comprehensive summary report produced at the end of the investigation."""
 
@@ -82,6 +108,9 @@ class FinalReport(TypedDict, total=False):
     summary: str
     recommendation: Recommendation | None
     missing_evidence: list[str]
+    remediation_result: RemediationOutcome | None
+    verification_result: VerificationOutcome | None
+    trace_id: str | None
 
 
 # ── Reducers ──────────────────────────────────────────────────────────
@@ -129,6 +158,7 @@ class InvestigationState(TypedDict, total=False):
     incident_id: str
     run_id: str
     thread_id: str
+    trace_id: str  # Distributed trace correlation (Phase 7)
 
     # Context
     incident: dict[str, Any]  # Title, description, service, severity, scenario_key
@@ -146,13 +176,17 @@ class InvestigationState(TypedDict, total=False):
     recommendation: Recommendation | None
     errors: Annotated[list[GraphError], operator.add]
     # status: "investigating" | "awaiting_approval" | "insufficient_evidence"
-    #         | "completed" | "failed"
+    #         | "remediating" | "verifying" | "completed" | "failed"
     status: str
     final_report: FinalReport | None
 
     # Human-in-the-loop approval
     approval_status: str | None  # "pending" | "approved" | "rejected" | "requested_more_evidence"
     approval_decision: dict[str, Any] | None
+
+    # Phase 6: Remediation and verification results
+    remediation_result: RemediationOutcome | None
+    verification_result: VerificationOutcome | None
 
     # Metadata & Provenance
     model_name: str
