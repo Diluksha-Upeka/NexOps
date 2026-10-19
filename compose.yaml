@@ -22,22 +22,70 @@ services:
         limits:
           memory: 256M
 
-  # --- Observability profile (later phases) ---
-  # prometheus:
-  #   profiles: [observability]
-  #   image: prom/prometheus:v2.54.0
-  #   ...
+  # --- Observability profile (Phase 7) ---
+  prometheus:
+    profiles: [observability]
+    image: prom/prometheus:v2.54.0
+    container_name: nexops-prometheus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=3d"
+      - "--web.enable-lifecycle"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
-  # grafana:
-  #   profiles: [observability]
-  #   image: grafana/grafana:11.2.0
-  #   ...
+  grafana:
+    profiles: [observability]
+    image: grafana/grafana:11.2.0
+    container_name: nexops-grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - ./dashboards/provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
-  # jaeger:
-  #   profiles: [observability]
-  #   image: jaegertracing/all-in-one:1.60
-  #   ...
+  jaeger:
+    profiles: [observability]
+    image: jaegertracing/all-in-one:1.60
+    container_name: nexops-jaeger
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:16686:16686" # Web UI
+      - "127.0.0.1:4318:4318"   # OTLP HTTP receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
 volumes:
   pgdata:
+    driver: local
+  promdata:
+    driver: local
+  grafanadata:
     driver: local
