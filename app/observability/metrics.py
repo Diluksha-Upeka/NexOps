@@ -120,9 +120,7 @@ def normalize_route_template(request: Request) -> str:
 class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
     """Starlette middleware to automatically track HTTP request counts and durations."""
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Any]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Any]) -> Response:
         # Don't record internal metrics scrape endpoint itself
         if request.url.path == "/metrics":
             res: Response = await call_next(request)

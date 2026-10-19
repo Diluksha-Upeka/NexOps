@@ -214,7 +214,8 @@ async def _execute_run(
                 val = getattr(first_int, "value", None) or (
                     first_int if isinstance(first_int, dict) else {}
                 )
-                raw_rec = result.get("recommendation") or (val.get("action") if isinstance(val, dict) else {})
+                fallback_act = val.get("action") if isinstance(val, dict) else {}
+                raw_rec = result.get("recommendation") or fallback_act
                 rec_dict: dict[str, Any] = dict(raw_rec) if isinstance(raw_rec, dict) else {}
                 action_type = str(rec_dict.get("action_type", "unknown"))
                 action_def = get_action_definition(action_type)
