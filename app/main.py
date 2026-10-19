@@ -12,6 +12,7 @@ import logging
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 # Windows: psycopg requires SelectorEventLoop, not ProactorEventLoop
 if sys.platform == "win32":
@@ -19,6 +20,7 @@ if sys.platform == "win32":
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.health import router as health_router
 from app.core.logging import setup_logging
@@ -139,6 +141,11 @@ def create_app() -> FastAPI:
     async def metrics_endpoint() -> Response:
         """Prometheus metrics exposition endpoint."""
         return get_metrics_response()
+
+    # Mount static frontend if built (e.g. for single-host container demo)
+    frontend_dist = Path("frontend/dist")
+    if frontend_dist.is_dir():
+        app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
 
     return app
 
