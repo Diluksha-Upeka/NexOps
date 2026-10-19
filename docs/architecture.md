@@ -63,44 +63,44 @@ The core reasoning engine is implemented as a bounded, stateful **LangGraph `Sta
 
 ```mermaid
 flowchart TD
-    START([Incident Created]) --> Triage[Triage Node<br/><i>Assess severity & affected services</i>]
+    START(["Incident Created"]) --> Triage["Triage Node<br/><i>Assess severity & affected services</i>"]
     
-    Triage --> Fanout{Parallel Evidence Fan-out}
+    Triage --> Fanout{"Parallel Evidence Fan-out"}
     
-    Fanout --> LogsNode[Gather Logs<br/><i>Error logs & stack traces</i>]
-    Fanout --> MetricsNode[Gather Metrics<br/><i>P99 latency, error rates, CPU</i>]
-    Fanout --> TracesNode[Gather Traces<br/><i>Trace spans & downstream 5xx</i>]
-    Fanout --> ChangesNode[Gather Changes<br/><i>Recent deploys & config updates</i>]
+    Fanout --> LogsNode["Gather Logs<br/><i>Error logs & stack traces</i>"]
+    Fanout --> MetricsNode["Gather Metrics<br/><i>P99 latency, error rates, CPU</i>"]
+    Fanout --> TracesNode["Gather Traces<br/><i>Trace spans & downstream 5xx</i>"]
+    Fanout --> ChangesNode["Gather Changes<br/><i>Recent deploys & config updates</i>"]
     
-    LogsNode --> Reducer[Combine Evidence<br/><i>Typed reducer: Annotated[list, add]</i>]
+    LogsNode --> Reducer["Combine Evidence<br/><i>Safe list reducer: add</i>"]
     MetricsNode --> Reducer
     TracesNode --> Reducer
     ChangesNode --> Reducer
     
-    Reducer --> Synthesis[Synthesis Node<br/><i>Hypothesize root cause & correlate</i>]
+    Reducer --> Synthesis["Synthesis Node<br/><i>Hypothesize root cause & correlate</i>"]
     
-    Synthesis --> SufficientCheck{Evidence<br/>Sufficient?}
+    Synthesis --> SufficientCheck{"Evidence<br/>Sufficient?"}
     
-    SufficientCheck -- "No & Round < Max" --> TargetedGather[Targeted Evidence Query<br/><i>Query specific subsystem</i>]
+    SufficientCheck -->|No: round below max| TargetedGather["Targeted Evidence Query<br/><i>Query specific subsystem</i>"]
     TargetedGather --> Synthesis
     
-    SufficientCheck -- "No & Round >= Max" --> Insufficient[Terminal Insufficient Evidence<br/><i>Escalate to human engineer</i>]
-    Insufficient --> END([Investigation Ended])
+    SufficientCheck -->|No: max rounds reached| Insufficient["Terminal Insufficient Evidence<br/><i>Escalate to human engineer</i>"]
+    Insufficient --> END(["Investigation Ended"])
     
-    SufficientCheck -- "Yes" --> Recommend[Remediation Recommendation<br/><i>Select action from catalog & policy check</i>]
+    SufficientCheck -->|Yes| Recommend["Remediation Recommendation<br/><i>Select action from catalog & policy check</i>"]
     
-    Recommend --> Interrupt{{Human Approval Interrupt<br/><b>Execution Pauses Durably</b>}}
+    Recommend --> Interrupt{{"Human Approval Interrupt<br/><b>Execution Pauses Durably</b>"}}
     
-    Interrupt -- "Human Rejects" --> Rejected[Record Rejection & Feedback]
+    Interrupt -->|Human Rejects| Rejected["Record Rejection & Feedback"]
     Rejected --> END
     
-    Interrupt -- "Human Approves" --> Remediation[Remediation Sandbox Executor<br/><i>Apply mutation to ShopAPI</i>]
+    Interrupt -->|Human Approves| Remediation["Remediation Sandbox Executor<br/><i>Apply mutation to ShopAPI</i>"]
     
-    Remediation --> Verification[Post-Action Verification<br/><i>Probe ShopAPI health & latency</i>]
+    Remediation --> Verification["Post-Action Verification<br/><i>Probe ShopAPI health & latency</i>"]
     
-    Verification --> SuccessCheck{Resolved?}
-    SuccessCheck -- "Yes" --> Resolved[Status: RESOLVED]
-    SuccessCheck -- "No" --> Mitigated[Status: MITIGATED / OPEN]
+    Verification --> SuccessCheck{"Resolved?"}
+    SuccessCheck -->|Yes: health verified| Resolved["Status: RESOLVED"]
+    SuccessCheck -->|No: degraded| Mitigated["Status: MITIGATED / OPEN"]
     
     Resolved --> END
     Mitigated --> END
