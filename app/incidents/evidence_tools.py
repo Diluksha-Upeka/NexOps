@@ -22,6 +22,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings import get_settings
+from app.observability.resilience import ResilientTimeoutError, with_timeout
+from app.observability.tracing import trace_span
 from app.shopapi.simulator import get_simulator
 from app.shopapi.telemetry_models import TelemetryEvent
 
@@ -110,44 +113,58 @@ async def query_logs(
     if err:
         return err
 
-    query = (
-        select(TelemetryEvent)
-        .where(
-            TelemetryEvent.kind == "log",
-            TelemetryEvent.service == service,
-            TelemetryEvent.timestamp >= start,
-            TelemetryEvent.timestamp <= end,
+    settings = get_settings()
+    timeout = float(settings.tool_timeout_seconds)
+
+    async def _execute() -> ToolResult:
+        async with trace_span("tool.query_logs", attributes={"service": service, "limit": limit}):
+            query = (
+                select(TelemetryEvent)
+                .where(
+                    TelemetryEvent.kind == "log",
+                    TelemetryEvent.service == service,
+                    TelemetryEvent.timestamp >= start,
+                    TelemetryEvent.timestamp <= end,
+                )
+                .order_by(TelemetryEvent.timestamp.desc())
+                .limit(limit)
+            )
+            if route:
+                query = query.where(TelemetryEvent.route == route)
+            if severity:
+                query = query.where(TelemetryEvent.level == severity.upper())
+
+            result = await session.execute(query)
+            rows = result.scalars().all()
+
+            data = [
+                {
+                    "id": str(r.id),
+                    "timestamp": r.timestamp.isoformat(),
+                    "level": r.level,
+                    "message": r.message,
+                    "route": r.route,
+                    "method": r.method,
+                    "status_code": r.status_code,
+                    "trace_id": r.trace_id,
+                }
+                for r in rows
+            ]
+            return ToolResult(
+                ok=True,
+                data=data,
+                count=len(data),
+                source_ref=f"logs:{service}:{start.isoformat()}/{end.isoformat()}",
+            )
+
+    try:
+        return await with_timeout(_execute(), timeout, operation_name="query_logs")
+    except ResilientTimeoutError:
+        return ToolResult(
+            ok=False,
+            error_code="tool_timeout",
+            error_message=f"query_logs timed out after {timeout:.1f}s.",
         )
-        .order_by(TelemetryEvent.timestamp.desc())
-        .limit(limit)
-    )
-    if route:
-        query = query.where(TelemetryEvent.route == route)
-    if severity:
-        query = query.where(TelemetryEvent.level == severity.upper())
-
-    result = await session.execute(query)
-    rows = result.scalars().all()
-
-    data = [
-        {
-            "id": str(r.id),
-            "timestamp": r.timestamp.isoformat(),
-            "level": r.level,
-            "message": r.message,
-            "route": r.route,
-            "method": r.method,
-            "status_code": r.status_code,
-            "trace_id": r.trace_id,
-        }
-        for r in rows
-    ]
-    return ToolResult(
-        ok=True,
-        data=data,
-        count=len(data),
-        source_ref=f"logs:{service}:{start.isoformat()}/{end.isoformat()}",
-    )
 
 
 # ── query_metrics ─────────────────────────────────────────────────────
@@ -180,75 +197,91 @@ async def query_metrics(
             error_message=f"Metric '{metric}' not supported. Available: {sorted(valid_metrics)}",
         )
 
-    query = (
-        select(TelemetryEvent)
-        .where(
-            TelemetryEvent.kind == "metric",
-            TelemetryEvent.service == service,
-            TelemetryEvent.timestamp >= start,
-            TelemetryEvent.timestamp <= end,
-        )
-        .order_by(TelemetryEvent.timestamp.desc())
-        .limit(limit)
-    )
-    result = await session.execute(query)
-    rows = list(result.scalars().all())
+    settings = get_settings()
+    timeout = float(settings.tool_timeout_seconds)
 
-    if not rows:
-        return ToolResult(
-            ok=True,
-            data=[],
-            count=0,
-            source_ref=f"metrics:{service}:{start.isoformat()}/{end.isoformat()}",
-        )
+    async def _execute() -> ToolResult:
+        async with trace_span(
+            "tool.query_metrics", attributes={"service": service, "metric": metric}
+        ):
+            query = (
+                select(TelemetryEvent)
+                .where(
+                    TelemetryEvent.kind == "metric",
+                    TelemetryEvent.service == service,
+                    TelemetryEvent.timestamp >= start,
+                    TelemetryEvent.timestamp <= end,
+                )
+                .order_by(TelemetryEvent.timestamp.desc())
+                .limit(limit)
+            )
+            result = await session.execute(query)
+            rows = list(result.scalars().all())
 
-    # Compute aggregates based on the metric type
-    aggregates: dict[str, Any] = {"sample_count": len(rows)}
+            if not rows:
+                return ToolResult(
+                    ok=True,
+                    data=[],
+                    count=0,
+                    source_ref=f"metrics:{service}:{start.isoformat()}/{end.isoformat()}",
+                )
 
-    if metric == "request_duration":
-        durations = [r.duration_ms for r in rows if r.duration_ms is not None]
-        if durations:
-            durations_sorted = sorted(durations)
-            aggregates.update(
-                {
-                    "min_ms": round(min(durations), 1),
-                    "max_ms": round(max(durations), 1),
-                    "avg_ms": round(sum(durations) / len(durations), 1),
-                    "p50_ms": round(durations_sorted[len(durations_sorted) // 2], 1),
-                    "p95_ms": round(durations_sorted[int(len(durations_sorted) * 0.95)], 1),
-                }
+            # Compute aggregates based on the metric type
+            aggregates: dict[str, Any] = {"sample_count": len(rows)}
+
+            if metric == "request_duration":
+                durations = [r.duration_ms for r in rows if r.duration_ms is not None]
+                if durations:
+                    durations_sorted = sorted(durations)
+                    aggregates.update(
+                        {
+                            "min_ms": round(min(durations), 1),
+                            "max_ms": round(max(durations), 1),
+                            "avg_ms": round(sum(durations) / len(durations), 1),
+                            "p50_ms": round(durations_sorted[len(durations_sorted) // 2], 1),
+                            "p95_ms": round(durations_sorted[int(len(durations_sorted) * 0.95)], 1),
+                        }
+                    )
+
+            elif metric == "error_rate":
+                total = len(rows)
+                errors = sum(1 for r in rows if r.status_code is not None and r.status_code >= 500)
+                aggregates.update(
+                    {
+                        "total_requests": total,
+                        "error_count": errors,
+                        "error_rate": round(errors / total, 4) if total > 0 else 0,
+                    }
+                )
+
+            elif metric == "request_count":
+                aggregates["total_requests"] = len(rows)
+
+            # Group by if requested
+            grouped: dict[str, int] = {}
+            valid_groups = {"route", "status_code", "method"}
+            if group_by and group_by in valid_groups:
+                for r in rows:
+                    key = str(getattr(r, group_by, "unknown"))
+                    grouped[key] = grouped.get(key, 0) + 1
+                aggregates["grouped_by"] = group_by
+                aggregates["groups"] = grouped
+
+            return ToolResult(
+                ok=True,
+                data=[aggregates],
+                count=len(rows),
+                source_ref=f"metrics:{service}:{metric}:{start.isoformat()}/{end.isoformat()}",
             )
 
-    elif metric == "error_rate":
-        total = len(rows)
-        errors = sum(1 for r in rows if r.status_code is not None and r.status_code >= 500)
-        aggregates.update(
-            {
-                "total_requests": total,
-                "error_count": errors,
-                "error_rate": round(errors / total, 4) if total > 0 else 0,
-            }
+    try:
+        return await with_timeout(_execute(), timeout, operation_name="query_metrics")
+    except ResilientTimeoutError:
+        return ToolResult(
+            ok=False,
+            error_code="tool_timeout",
+            error_message=f"query_metrics timed out after {timeout:.1f}s.",
         )
-
-    elif metric == "request_count":
-        aggregates["total_requests"] = len(rows)
-
-    # Group by if requested
-    grouped: dict[str, int] = {}
-    valid_groups = {"route", "status_code", "method"}
-    if group_by and group_by in valid_groups:
-        for r in rows:
-            key = str(getattr(r, group_by, "unknown"))
-            grouped[key] = grouped.get(key, 0) + 1
-        aggregates["grouped_by"] = group_by
-        aggregates["groups"] = grouped
-
-    return ToolResult(
-        ok=True,
-        data=[aggregates],
-        count=len(rows),
-        source_ref=f"metrics:{service}:{metric}:{start.isoformat()}/{end.isoformat()}",
-    )
 
 
 # ── query_traces ──────────────────────────────────────────────────────
@@ -271,42 +304,58 @@ async def query_traces(
     if err:
         return err
 
-    query = (
-        select(TelemetryEvent)
-        .where(
-            TelemetryEvent.kind == "span",
-            TelemetryEvent.service == service,
-            TelemetryEvent.timestamp >= start,
-            TelemetryEvent.timestamp <= end,
+    settings = get_settings()
+    timeout = float(settings.tool_timeout_seconds)
+
+    async def _execute() -> ToolResult:
+        async with trace_span(
+            "tool.query_traces", attributes={"service": service, "trace_id": trace_id}
+        ):
+            query = (
+                select(TelemetryEvent)
+                .where(
+                    TelemetryEvent.kind == "span",
+                    TelemetryEvent.service == service,
+                    TelemetryEvent.timestamp >= start,
+                    TelemetryEvent.timestamp <= end,
+                )
+                .order_by(TelemetryEvent.timestamp.desc())
+                .limit(limit)
+            )
+            if trace_id:
+                query = query.where(TelemetryEvent.trace_id == trace_id)
+
+            result = await session.execute(query)
+            rows = result.scalars().all()
+
+            data = [
+                {
+                    "id": str(r.id),
+                    "timestamp": r.timestamp.isoformat(),
+                    "trace_id": r.trace_id,
+                    "span_id": r.span_id,
+                    "parent_span_id": r.parent_span_id,
+                    "duration_ms": r.duration_ms,
+                    "status_code": r.status_code,
+                    "attributes": r.attributes,
+                }
+                for r in rows
+            ]
+            return ToolResult(
+                ok=True,
+                data=data,
+                count=len(data),
+                source_ref=f"traces:{service}:{start.isoformat()}/{end.isoformat()}",
+            )
+
+    try:
+        return await with_timeout(_execute(), timeout, operation_name="query_traces")
+    except ResilientTimeoutError:
+        return ToolResult(
+            ok=False,
+            error_code="tool_timeout",
+            error_message=f"query_traces timed out after {timeout:.1f}s.",
         )
-        .order_by(TelemetryEvent.timestamp.desc())
-        .limit(limit)
-    )
-    if trace_id:
-        query = query.where(TelemetryEvent.trace_id == trace_id)
-
-    result = await session.execute(query)
-    rows = result.scalars().all()
-
-    data = [
-        {
-            "id": str(r.id),
-            "timestamp": r.timestamp.isoformat(),
-            "trace_id": r.trace_id,
-            "span_id": r.span_id,
-            "parent_span_id": r.parent_span_id,
-            "duration_ms": r.duration_ms,
-            "status_code": r.status_code,
-            "attributes": r.attributes,
-        }
-        for r in rows
-    ]
-    return ToolResult(
-        ok=True,
-        data=data,
-        count=len(data),
-        source_ref=f"traces:{service}:{start.isoformat()}/{end.isoformat()}",
-    )
 
 
 # ── query_changes ─────────────────────────────────────────────────────
@@ -327,28 +376,44 @@ async def query_changes(
     if err:
         return err
 
-    simulator = get_simulator()
-    all_changes = simulator.change_history
+    settings = get_settings()
+    timeout = float(settings.tool_timeout_seconds)
 
-    # Filter changes within the time window
-    filtered = []
-    for change in all_changes:
-        ts_str = change.get("timestamp", "")
-        try:
-            ts = datetime.fromisoformat(ts_str)
-        except (ValueError, TypeError):
-            continue
-        if start <= ts <= end and change.get("service", "") == service:
-            filtered.append(change)
+    async def _execute() -> ToolResult:
+        async with trace_span(
+            "tool.query_changes", attributes={"service": service, "limit": limit}
+        ):
+            simulator = get_simulator()
+            all_changes = simulator.change_history
 
-    filtered = filtered[:limit]
+            # Filter changes within the time window
+            filtered = []
+            for change in all_changes:
+                ts_str = change.get("timestamp", "")
+                try:
+                    ts = datetime.fromisoformat(ts_str)
+                except (ValueError, TypeError):
+                    continue
+                if start <= ts <= end and change.get("service", "") == service:
+                    filtered.append(change)
 
-    return ToolResult(
-        ok=True,
-        data=filtered,
-        count=len(filtered),
-        source_ref=f"changes:{service}:{start.isoformat()}/{end.isoformat()}",
-    )
+            filtered = filtered[:limit]
+
+            return ToolResult(
+                ok=True,
+                data=filtered,
+                count=len(filtered),
+                source_ref=f"changes:{service}:{start.isoformat()}/{end.isoformat()}",
+            )
+
+    try:
+        return await with_timeout(_execute(), timeout, operation_name="query_changes")
+    except ResilientTimeoutError:
+        return ToolResult(
+            ok=False,
+            error_code="tool_timeout",
+            error_message=f"query_changes timed out after {timeout:.1f}s.",
+        )
 
 
 # ── get_simulator_status ──────────────────────────────────────────────

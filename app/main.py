@@ -1,7 +1,8 @@
-"""FastAPI application assembly.
+"""FastAPI application assembly with observability and resilience.
 
 This is the single entry point for the API server. It wires together
-settings, logging, database lifecycle, CORS, and all routers.
+settings, structured logging with distributed trace correlation, database lifecycle,
+CORS, Prometheus metrics, OpenTelemetry distributed tracing, and all routers.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from contextlib import asynccontextmanager
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
@@ -25,6 +26,13 @@ from app.core.settings import get_settings
 from app.db.engine import dispose_engine, init_engine
 from app.graph.checkpoint import close_checkpointer, init_checkpointer
 from app.incidents.router import router as incidents_router
+from app.observability import (
+    PrometheusMetricsMiddleware,
+    TracingMiddleware,
+    get_metrics_response,
+    init_tracing,
+    shutdown_tracing,
+)
 from app.shopapi.router import router as shopapi_router
 from app.shopapi.simulator import init_simulator
 from app.shopapi.simulator_router import router as simulator_router
@@ -50,6 +58,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         },
     )
 
+    # Distributed Tracing (Phase 7)
+    init_tracing(
+        endpoint=settings.otel_exporter_otlp_endpoint
+        if settings.otel_exporter_otlp_endpoint
+        else None,
+        service_name="nexops",
+    )
+    logger.info("OpenTelemetry tracing initialized")
+
     # Database
     init_engine(settings)
     logger.info("Database engine initialised")
@@ -70,9 +87,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     # Shutdown
+    shutdown_tracing()
     await dispose_engine()
     await close_checkpointer()
-    logger.info("Database engine disposed — shutdown complete")
+    logger.info("Database engine disposed and tracing flushed — shutdown complete")
 
 
 def create_app() -> FastAPI:
@@ -101,6 +119,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Observability Middlewares (Phase 7)
+    # TracingMiddleware extracts/injects traceparent headers and starts server spans
+    app.add_middleware(TracingMiddleware)
+    # PrometheusMetricsMiddleware tracks HTTP requests and latencies with safe route templates
+    app.add_middleware(PrometheusMetricsMiddleware)
+
     # Routers
     app.include_router(health_router)
     app.include_router(shopapi_router)
@@ -109,6 +133,12 @@ def create_app() -> FastAPI:
     # Simulator routes — only in development
     if settings.simulator_enabled and settings.is_development:
         app.include_router(simulator_router)
+
+    # Prometheus scrape endpoint
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics_endpoint() -> Response:
+        """Prometheus metrics exposition endpoint."""
+        return get_metrics_response()
 
     return app
 
