@@ -30,6 +30,7 @@ export interface RunDetail {
   incident_id: string;
   approval: Approval | null;
   is_awaiting_approval: boolean;
+  trace_id?: string | null;
 }
 
 async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {

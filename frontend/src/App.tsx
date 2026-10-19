@@ -121,6 +121,45 @@ function App() {
             <p>All remediation is confined to the local simulator — never touches production.</p>
             <span className="badge">Phase 6</span>
           </div>
+          <div className="info-card">
+            <span className="info-icon">📊</span>
+            <h3>Observability & Resilience</h3>
+            <p>Prometheus metrics, Grafana dashboards, OpenTelemetry distributed tracing.</p>
+            <span className="badge">Phase 7</span>
+          </div>
+        </section>
+
+        <section className="status-card">
+          <h2>Observability & Telemetry Links <span className="badge">Phase 7</span></h2>
+          <div className="telemetry-links" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+            <a
+              href="http://localhost:3000/d/nexops-main"
+              target="_blank"
+              rel="noreferrer"
+              className="badge"
+              style={{ textDecoration: 'none', padding: '0.5rem 1rem', background: '#2563eb', color: '#fff' }}
+            >
+              📈 Grafana Dashboard (Port 3000)
+            </a>
+            <a
+              href="http://localhost:16686"
+              target="_blank"
+              rel="noreferrer"
+              className="badge"
+              style={{ textDecoration: 'none', padding: '0.5rem 1rem', background: '#059669', color: '#fff' }}
+            >
+              🔍 Jaeger Traces (Port 16686)
+            </a>
+            <a
+              href="/metrics"
+              target="_blank"
+              rel="noreferrer"
+              className="badge"
+              style={{ textDecoration: 'none', padding: '0.5rem 1rem', background: '#d97706', color: '#fff' }}
+            >
+              ⚡ Prometheus /metrics
+            </a>
+          </div>
         </section>
 
         <section className="status-card">
@@ -147,7 +186,24 @@ function App() {
               </div>
             </div>
           )}
-          {run && !run.is_awaiting_approval && <p className="hint">Run status: {run.status}</p>}
+          {run && !run.is_awaiting_approval && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <p className="hint">Run status: <strong>{run.status}</strong></p>
+              {run.trace_id && (
+                <p className="hint" style={{ marginTop: '0.25rem' }}>
+                  Distributed Trace ID:{' '}
+                  <a
+                    href={`http://localhost:16686/trace/${run.trace_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: '#38bdf8', fontFamily: 'monospace' }}
+                  >
+                    {run.trace_id}
+                  </a>
+                </p>
+              )}
+            </div>
+          )}
           {actionError && <p className="status-error">{actionError}</p>}
         </section>
 
