@@ -1,14 +1,14 @@
 # NexOps — Agentic Incident Response Workbench
 
-[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-orange.svg)](https://langchain-ai.github.io/langgraph/)
-[![React 19](https://img.shields.io/badge/React-19.0-61DAFB.svg)](https://react.dev/)
-[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg)](https://opentelemetry.io/)
-[![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C.svg)](https://prometheus.io/)
-[![Grafana](https://img.shields.io/badge/Grafana-11.2-F46800.svg)](https://grafana.com/)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Checked with mypy](https://img.shields.io/badge/mypy-strict-blue)](http://mypy-lang.org/)
+[![Python 3.12](assets/badges/python.svg)](https://www.python.org/)
+[![FastAPI](assets/badges/fastapi.svg)](https://fastapi.tiangolo.com/)
+[![LangGraph](assets/badges/langgraph.svg)](https://langchain-ai.github.io/langgraph/)
+[![React 19](assets/badges/react.svg)](https://react.dev/)
+[![OpenTelemetry](assets/badges/opentelemetry.svg)](https://opentelemetry.io/)
+[![Prometheus](assets/badges/prometheus.svg)](https://prometheus.io/)
+[![Grafana](assets/badges/grafana.svg)](https://grafana.com/)
+[![Ruff](assets/badges/ruff.svg)](https://github.com/astral-sh/ruff)
+[![Checked with mypy](assets/badges/mypy.svg)](https://mypy-lang.org/)
 
 > **NexOps** is a local incident-response workbench that investigates service incidents using a stateful **LangGraph** workflow with parallel evidence gathering, human-in-the-loop approval, and sandboxed remediation.
 
