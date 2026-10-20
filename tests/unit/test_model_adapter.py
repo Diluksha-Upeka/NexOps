@@ -308,7 +308,8 @@ async def test_hosted_openai_adapter_timeout() -> None:
 
 def test_get_llm_adapter_factory() -> None:
     """Verify get_llm_adapter instantiates correct adapter based on configuration."""
-    adapter = get_llm_adapter()
+    fake_settings = Settings(llm_provider="fake")
+    adapter = get_llm_adapter(fake_settings)
     assert isinstance(adapter, FakeLLMAdapter)
 
     custom_settings = Settings(
@@ -319,6 +320,19 @@ def test_get_llm_adapter_factory() -> None:
     hosted_adapter = get_llm_adapter(custom_settings)
     assert isinstance(hosted_adapter, HostedOpenAIAdapter)
     assert hosted_adapter.model_name == "gpt-4o"
+
+    gemini_settings = Settings(
+        llm_provider="google",
+        llm_model="gemini-flash",
+        llm_api_key=SecretStr("gemini-test-key"),
+        llm_base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        llm_timeout_seconds=75.0,
+    )
+    gemini_adapter = get_llm_adapter(gemini_settings)
+    assert isinstance(gemini_adapter, HostedOpenAIAdapter)
+    assert gemini_adapter.model_name == "gemini-flash"
+    assert gemini_adapter.base_url == "https://generativelanguage.googleapis.com/v1beta/openai"
+    assert gemini_adapter.timeout_seconds == 75.0
 
 
 @pytest.mark.asyncio
