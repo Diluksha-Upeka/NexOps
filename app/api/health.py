@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
 
 
+@router.get("/health")
 @router.get("/api/v1/health")
 async def health_check() -> dict[str, Any]:
     """Return service health status including database connectivity."""

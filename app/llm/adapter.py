@@ -590,11 +590,17 @@ def get_llm_adapter(settings: Settings | None = None) -> BaseLLMAdapter:
     provider = (app_settings.llm_provider or "fake").lower().strip()
     api_key = app_settings.llm_api_key.get_secret_value()
 
-    if provider in ("openai", "hosted", "hosted_openai", "remote") and api_key:
+    if provider in ("openai", "google", "gemini", "hosted", "hosted_openai", "remote") and api_key:
+        default_base_url = (
+            "https://generativelanguage.googleapis.com/v1beta/openai"
+            if provider in ("google", "gemini")
+            else "https://api.openai.com/v1"
+        )
         return HostedOpenAIAdapter(
             model_name=app_settings.llm_model or "gpt-4o-mini",
             api_key=api_key,
-            base_url=app_settings.llm_base_url or "https://api.openai.com/v1",
+            base_url=app_settings.llm_base_url or default_base_url,
+            timeout_seconds=app_settings.llm_timeout_seconds,
         )
 
     return FakeLLMAdapter(model_name=app_settings.llm_model or "fake-incident-reasoner-v1")
