@@ -12,7 +12,33 @@ export interface Incident {
   description: string;
   status: string;
   severity: string;
+  service: string;
+  source: string;
   scenario_key: string | null;
+  started_at: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export interface EvidenceItem {
+  id: string;
+  run_id: string;
+  source_type: string;
+  observed_at: string;
+  summary: string;
+  payload_json: Record<string, unknown> | null;
+  source_ref: string | null;
+  confidence: number | null;
+  simulated: boolean;
+}
+
+export interface Hypothesis {
+  cause_key: string;
+  title: string;
+  description: string;
+  confidence: number;
+  supporting_evidence_ids: string[];
+  contradictions: string[];
 }
 
 export interface Approval {
@@ -22,15 +48,41 @@ export interface Approval {
   action_payload: Record<string, unknown> | null;
   risk: string;
   reasoning: string;
+  actor: string | null;
+  decided_at: string | null;
 }
 
 export interface RunDetail {
   id: string;
   status: string;
   incident_id: string;
+  thread_id: string;
+  evidence: EvidenceItem[];
+  hypotheses: Hypothesis[];
+  proposed_action: Record<string, unknown> | null;
   approval: Approval | null;
   is_awaiting_approval: boolean;
-  trace_id?: string | null;
+  run: {
+    id: string;
+    status: string;
+    started_at: string;
+    finished_at: string | null;
+    model_name: string | null;
+    prompt_version: string | null;
+    graph_version: string | null;
+    error_code: string | null;
+    error_message: string | null;
+  };
+}
+
+export interface InvestigationRun {
+  id: string;
+  incident_id: string;
+  thread_id: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  model_name: string | null;
 }
 
 async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
@@ -43,13 +95,15 @@ async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
-  const res = await fetch(`${API_BASE}/health`);
-  if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
-  return res.json();
+  return apiRequest('/health');
 }
 
 export async function fetchIncidents(): Promise<{ items: Incident[]; total: number }> {
-  return apiRequest('/incidents');
+  return apiRequest('/incidents?limit=100');
+}
+
+export async function fetchIncident(id: string): Promise<Incident> {
+  return apiRequest(`/incidents/${id}`);
 }
 
 export async function startInvestigation(incidentId: string): Promise<{ id: string }> {
@@ -58,6 +112,14 @@ export async function startInvestigation(incidentId: string): Promise<{ id: stri
 
 export async function fetchRun(runId: string): Promise<RunDetail> {
   return apiRequest(`/runs/${runId}`);
+}
+
+export async function fetchRunsForIncident(incidentId: string): Promise<InvestigationRun[]> {
+  return apiRequest(`/incidents/${incidentId}/runs`);
+}
+
+export async function fetchEvidence(runId: string): Promise<EvidenceItem[]> {
+  return apiRequest(`/runs/${runId}/evidence`);
 }
 
 export async function submitApproval(
@@ -73,3 +135,34 @@ export async function submitApproval(
     }),
   });
 }
+
+export async function resolveIncident(
+  incidentId: string,
+  reason: string = 'Resolved by operator',
+): Promise<Incident> {
+  return apiRequest(`/incidents/${incidentId}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, actor: 'dev-operator' }),
+  });
+}
+
+export async function createIncident(data: {
+  title: string;
+  description: string;
+  service?: string;
+  severity?: 'critical' | 'high' | 'medium' | 'low';
+  source?: 'manual' | 'simulator';
+  scenario_key?: string | null;
+}): Promise<Incident> {
+  return apiRequest('/incidents', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function startScenario(scenarioKey: string): Promise<Record<string, unknown>> {
+  return apiRequest(`/simulator/scenarios/${scenarioKey}/start`, {
+    method: 'POST',
+  });
+}
+
