@@ -38,6 +38,9 @@ class Settings(BaseSettings):
         default=SecretStr(""), description="Provider API key (redacted)."
     )
     llm_base_url: str = Field(default="", description="Optional custom base URL.")
+    llm_timeout_seconds: float = Field(
+        default=60.0, ge=5.0, le=300.0, description="LLM provider request timeout."
+    )
 
     # --- Graph ---
     graph_max_rounds: int = Field(default=2, ge=1, le=10, description="Max investigation rounds.")

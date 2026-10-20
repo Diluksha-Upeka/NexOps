@@ -203,7 +203,6 @@ async def run_investigation(
 
     configurable: dict[str, Any] = {
         "thread_id": resolved_thread_id,
-        "session": session,
     }
     if mock_errors:
         configurable.update(mock_errors)
