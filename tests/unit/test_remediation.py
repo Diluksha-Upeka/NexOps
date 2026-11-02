@@ -521,6 +521,28 @@ class TestVerification:
         assert result.outcome == "failed"
         assert result.recommended_incident_status == "open"
 
+    def test_no_op_execution_never_resolves(self, simulator: SimulatorState) -> None:
+        """A no-op must not count as a remediation mutation."""
+        exec_result = ExecutionResult(
+            success=True,
+            action_type="disable_fault",
+            idempotency_key="key-no-op",
+            executed_at="2026-10-19T00:00:00+00:00",
+            status="no_op",
+            details={"scenario_key": "db_latency"},
+        )
+
+        result = verify_remediation(
+            execution_result=exec_result,
+            simulator=simulator,
+            action_type="disable_fault",
+            parameters={"scenario_key": "db_latency"},
+        )
+
+        assert result.passed is False
+        assert result.outcome == "failed"
+        assert result.recommended_incident_status == "open"
+
     def test_verification_checks_are_populated(self, simulator: SimulatorState) -> None:
         """Verification result should include detailed check data."""
         exec_result = ExecutionResult(

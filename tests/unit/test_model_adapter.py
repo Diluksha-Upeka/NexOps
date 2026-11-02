@@ -288,6 +288,61 @@ async def test_hosted_openai_adapter_http_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_hosted_openai_adapter_retries_transient_errors() -> None:
+    """Transient provider failures should retry before returning a result."""
+    adapter = HostedOpenAIAdapter(
+        model_name="gemini-flash",
+        api_key="gemini-test-key",
+        max_retries=2,
+    )
+    retry_response = httpx.Response(
+        status_code=503,
+        text="temporarily unavailable",
+        request=httpx.Request("POST", "https://example.test/chat/completions"),
+    )
+    success_response = httpx.Response(
+        status_code=200,
+        json={
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "primary_cause": "db_latency",
+                                "confidence": 0.9,
+                                "reasoning": "Latency increased after the simulated fault.",
+                                "supporting_evidence_ids": [],
+                                "contradictions": [],
+                                "missing_evidence": [],
+                            }
+                        )
+                    }
+                }
+            ]
+        },
+        request=httpx.Request("POST", "https://example.test/chat/completions"),
+    )
+
+    with (
+        patch.object(
+            httpx.AsyncClient,
+            "post",
+            new_callable=AsyncMock,
+            side_effect=[retry_response, success_response],
+        ) as mock_post,
+        patch("app.llm.adapter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+    ):
+        result = await adapter.generate_root_cause_analysis(
+            {"title": "Latency spike", "service": "shopapi"},
+            [],
+        )
+
+    assert result.success is True
+    assert mock_post.await_count == 2
+    mock_sleep.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio
 async def test_hosted_openai_adapter_timeout() -> None:
     """Verify HostedOpenAIAdapter handles connection timeouts gracefully."""
     adapter = HostedOpenAIAdapter(
