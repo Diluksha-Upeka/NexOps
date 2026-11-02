@@ -11,6 +11,7 @@ Features:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -391,11 +392,13 @@ class HostedOpenAIAdapter(BaseLLMAdapter):
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
         timeout_seconds: float = 30.0,
+        max_retries: int = 2,
     ) -> None:
         super().__init__(model_name=model_name, provider="openai")
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.max_retries = max(0, max_retries)
 
     def _redact(self, message: str) -> str:
         """Ensure API keys are never leaked in error messages or logs."""
@@ -427,14 +430,42 @@ class HostedOpenAIAdapter(BaseLLMAdapter):
         t0 = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.post(url, headers=headers, json=payload)
+                for attempt in range(self.max_retries + 1):
+                    response = await client.post(url, headers=headers, json=payload)
+                    if response.status_code == 200:
+                        latency_ms = (time.perf_counter() - t0) * 1000
+                        return response.json(), latency_ms, None
+
+                    retryable = response.status_code in {429, 500, 502, 503, 504}
+                    if not retryable or attempt >= self.max_retries:
+                        latency_ms = (time.perf_counter() - t0) * 1000
+                        err_msg = self._redact(
+                            f"HTTP {response.status_code} after {attempt + 1} attempt(s): "
+                            f"{response.text[:200]}"
+                        )
+                        return None, latency_ms, err_msg
+
+                    retry_after = response.headers.get("retry-after")
+                    try:
+                        delay = min(float(retry_after), 8.0) if retry_after else 2**attempt
+                    except ValueError:
+                        delay = 2**attempt
+                    logger.warning(
+                        "Transient hosted LLM response; retrying",
+                        extra={
+                            "structured": {
+                                "status_code": response.status_code,
+                                "attempt": attempt + 1,
+                                "max_attempts": self.max_retries + 1,
+                                "delay_seconds": delay,
+                                "model": self.model_name,
+                            }
+                        },
+                    )
+                    await asyncio.sleep(delay)
+
                 latency_ms = (time.perf_counter() - t0) * 1000
-
-                if response.status_code != 200:
-                    err_msg = self._redact(f"HTTP {response.status_code}: {response.text[:200]}")
-                    return None, latency_ms, err_msg
-
-                return response.json(), latency_ms, None
+                return None, latency_ms, "Hosted LLM request exhausted retries."
         except httpx.TimeoutException:
             latency_ms = (time.perf_counter() - t0) * 1000
             return None, latency_ms, "Request timed out waiting for provider response."
