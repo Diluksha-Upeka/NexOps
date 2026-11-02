@@ -82,12 +82,15 @@ def _check_no_active_faults(simulator: SimulatorState) -> dict[str, Any]:
 
 def _check_execution_success(execution_result: ExecutionResult) -> dict[str, Any]:
     """Verify the execution itself reported success."""
+    mutation_message = (
+        "Mutation applied" if execution_result.status == "success" else "No mutation applied"
+    )
     return {
         "check": "execution_success",
-        "passed": execution_result.success and execution_result.status in ("success", "no_op"),
+        "passed": execution_result.success and execution_result.status == "success",
         "detail": (
             f"Execution status: {execution_result.status}. "
-            f"{'Succeeded' if execution_result.success else 'Failed'}."
+            f"{mutation_message}."
         ),
     }
 
