@@ -242,19 +242,26 @@ async def _execute_run(
                 )
             await svc.append_run_event(run_id, "run_finished", {"status": graph_status})
 
-            if graph_status != "failed":
-                verif = result.get("verification_result") or {}
+            verif = result.get("verification_result") or {}
+            verif_outcome = verif.get("outcome") if isinstance(verif, dict) else None
+            if verif_outcome in {"resolved", "mitigated"}:
                 inc_id = uuid.UUID(str(incident["id"]))
                 current_inc = await svc.get_incident(inc_id)
-                if current_inc and current_inc.status in {"open", "investigating", "awaiting_approval", "remediating", "verifying"}:
+                if current_inc and current_inc.status in {
+                    "open",
+                    "investigating",
+                    "awaiting_approval",
+                    "remediating",
+                    "verifying",
+                }:
                     reason_msg = (
                         verif.get("summary", "Remediation verified successfully")
                         if isinstance(verif, dict)
-                        else "Investigation completed"
+                        else "Remediation verified"
                     )
                     await svc.transition_incident(
                         inc_id,
-                        "resolved",
+                        verif_outcome,
                         actor="system",
                         reason=str(reason_msg),
                     )
