@@ -5,6 +5,7 @@ import {
   fetchIncidents,
   fetchRun,
   fetchRunsForIncident,
+  generateScenarioTraffic,
   resolveIncident,
   startInvestigation,
   startScenario,
@@ -26,13 +27,13 @@ type Page = 'dashboard' | 'observability';
 
 /* ── Workflow stage map ── */
 const PIPELINE_STAGES = [
-  { key: 'triage', label: 'Triage', icon: '🔍' },
-  { key: 'evidence', label: 'Evidence', icon: '📊' },
-  { key: 'analysis', label: 'Analysis', icon: '🧠' },
-  { key: 'proposal', label: 'Proposal', icon: '💡' },
-  { key: 'approval', label: 'Approval', icon: '🛡️' },
-  { key: 'remediation', label: 'Remediation', icon: '🔧' },
-  { key: 'verification', label: 'Verify', icon: '✅' },
+  { key: 'triage', label: 'Triage', icon: '🔍', description: 'Understanding the incident' },
+  { key: 'evidence', label: 'Evidence', icon: '📊', description: 'Collecting logs, metrics, traces, and changes' },
+  { key: 'analysis', label: 'Analysis', icon: '🧠', description: 'Finding the most likely cause' },
+  { key: 'proposal', label: 'Proposal', icon: '💡', description: 'Preparing a safe action' },
+  { key: 'approval', label: 'Approval', icon: '🛡️', description: 'Waiting for your decision' },
+  { key: 'remediation', label: 'Fix', icon: '🔧', description: 'Applying the approved sandbox fix' },
+  { key: 'verification', label: 'Verify', icon: '✅', description: 'Checking that the service recovered' },
 ] as const;
 
 function resolveStageIndex(status: string, isAwaitingApproval: boolean): number {
@@ -184,8 +185,9 @@ function App() {
     setSimulating(true);
     try {
       await startScenario(scenarioKey);
+      await generateScenarioTraffic();
       const titles: Record<string, { title: string; desc: string; severity: 'critical' | 'high' | 'medium' }> = {
-        db_connection_exhaustion: {
+        db_conn_exhaustion: {
           title: 'ShopAPI database connection pool exhaustion',
           desc: 'Customer requests timing out due to connection pool exhaustion.',
           severity: 'critical',
@@ -372,7 +374,7 @@ function DashboardPage({
   onApproval,
   onDismissError,
 }: DashboardProps) {
-  const [simScenario, setSimScenario] = useState('db_connection_exhaustion');
+  const [simScenario, setSimScenario] = useState('db_conn_exhaustion');
 
   const sorted = [...incidents].sort(
     (a, b) => (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3),
@@ -393,7 +395,7 @@ function DashboardPage({
       >
         <div>
           <h1 className="page-title">Incident Dashboard</h1>
-          <p className="page-subtitle">Monitor, investigate, and remediate service incidents</p>
+          <p className="page-subtitle">Select an incident, then follow each step.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
           <select
@@ -408,7 +410,7 @@ function DashboardPage({
               fontSize: '0.8rem',
             }}
           >
-            <option value="db_connection_exhaustion">⚡ DB Pool Exhaustion (Critical)</option>
+            <option value="db_conn_exhaustion">⚡ DB Pool Exhaustion (Critical)</option>
             <option value="db_latency">⏱️ ShopAPI High Latency (High)</option>
             <option value="bad_release">⚠️ Bad Release Degradation (Medium)</option>
           </select>
@@ -417,7 +419,7 @@ function DashboardPage({
             onClick={() => onTriggerSimulation(simScenario)}
             disabled={simulating}
           >
-            {simulating ? 'Injecting…' : '⚡ Inject Fault'}
+            {simulating ? 'Preparing…' : '⚡ New test'}
           </button>
         </div>
       </div>
@@ -434,21 +436,21 @@ function DashboardPage({
       {/* Stat Cards */}
       <div className="stats-grid">
         <div className="stat-card blue">
-          <div className="stat-label">Total Incidents</div>
+          <div className="stat-label">Incidents</div>
           <div className="stat-value">{totalIncidents}</div>
-          <div className="stat-detail">Across all states</div>
+          <div className="stat-detail">All incidents</div>
           <span className="stat-icon">📋</span>
         </div>
         <div className="stat-card amber">
           <div className="stat-label">Active</div>
           <div className="stat-value">{openCount + investigatingCount}</div>
-          <div className="stat-detail">{openCount} open · {investigatingCount} investigating</div>
+          <div className="stat-detail">{openCount} open · {investigatingCount} running</div>
           <span className="stat-icon">🔥</span>
         </div>
         <div className="stat-card green">
           <div className="stat-label">Resolved</div>
           <div className="stat-value">{resolvedCount}</div>
-          <div className="stat-detail">Successfully remediated</div>
+          <div className="stat-detail">Finished</div>
           <span className="stat-icon">✅</span>
         </div>
         <div className="stat-card purple">
@@ -559,34 +561,42 @@ function DashboardPage({
                   status={currentRun?.status ?? 'running'}
                   isAwaitingApproval={currentRun?.is_awaiting_approval ?? false}
                   investigating={investigating}
+                  evidenceCount={currentRun?.evidence.length ?? 0}
+                  modelName={currentRun?.run.model_name}
                 />
               )}
 
               {/* Evidence Cards */}
               {currentRun && currentRun.evidence.length > 0 && (
-                <div className="evidence-grid">
-                  {currentRun.evidence.map((ev) => (
-                    <div className="evidence-card" key={ev.id}>
-                      <div className="evidence-card-header">
-                        <span className={`evidence-source-icon ${ev.source_type}`}>
-                          {ev.source_type === 'logs'
-                            ? '📝'
-                            : ev.source_type === 'metrics'
-                              ? '📊'
-                              : ev.source_type === 'traces'
-                                ? '🔗'
-                                : '🚀'}
-                        </span>
-                        <span className="evidence-source-label">{ev.source_type}</span>
-                        {ev.confidence != null && (
-                          <span className="evidence-confidence">
-                            {(ev.confidence * 100).toFixed(0)}%
+                <div className="evidence-section">
+                  <div className="compact-section-heading">
+                    <strong>What the system found</strong>
+                    <span>{currentRun.evidence.length} signals</span>
+                  </div>
+                  <div className="evidence-grid">
+                    {currentRun.evidence.map((ev) => (
+                      <div className="evidence-card" key={ev.id}>
+                        <div className="evidence-card-header">
+                          <span className={`evidence-source-icon ${ev.source_type}`}>
+                            {ev.source_type === 'logs'
+                              ? '📝'
+                              : ev.source_type === 'metrics'
+                                ? '📊'
+                                : ev.source_type === 'traces'
+                                  ? '🔗'
+                                  : '🚀'}
                           </span>
-                        )}
+                          <span className="evidence-source-label">{ev.source_type}</span>
+                          {ev.confidence != null && (
+                            <span className="evidence-confidence">
+                              {(ev.confidence * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                        <p className="evidence-summary">{ev.summary}</p>
                       </div>
-                      <p className="evidence-summary">{ev.summary}</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -597,10 +607,11 @@ function DashboardPage({
                     <div className="hypothesis-card" key={i}>
                       <div className="hypothesis-header">
                         <span className="hypothesis-title">
-                          🎯 Root Cause: {h.title}
+                          🎯 Most likely cause
                         </span>
                         <ConfidenceRing value={h.confidence} />
                       </div>
+                      <strong className="hypothesis-name">{h.title}</strong>
                       <p className="hypothesis-desc">{h.description}</p>
                       {h.supporting_evidence_ids.length > 0 && (
                         <p className="hypothesis-citations">
@@ -630,9 +641,9 @@ function DashboardPage({
                 <div className="approval-header">
                   <div className="approval-icon">🛡️</div>
                   <div>
-                    <div className="approval-title">Human Approval Required</div>
+                    <div className="approval-title">Your decision is needed</div>
                     <div className="approval-subtitle">
-                      The AI has paused — no action runs until you decide
+                        The investigation is paused. Choose what happens next.
                     </div>
                   </div>
                 </div>
@@ -691,18 +702,55 @@ function WorkflowPipeline({
   status,
   isAwaitingApproval,
   investigating,
+  evidenceCount,
+  modelName,
 }: {
   status: string;
   isAwaitingApproval: boolean;
   investigating: boolean;
+  evidenceCount: number;
+  modelName: string | null | undefined;
 }) {
   const activeIdx = investigating && status === 'running' && !isAwaitingApproval
     ? 2
     : resolveStageIndex(status, isAwaitingApproval);
   const allDone = activeIdx >= PIPELINE_STAGES.length;
+  const activeStage = isAwaitingApproval
+    ? PIPELINE_STAGES[4]
+    : activeIdx >= 0 && activeIdx < PIPELINE_STAGES.length
+      ? PIPELINE_STAGES[activeIdx]
+      : null;
 
   return (
-    <div className="workflow-pipeline">
+    <div className="workflow-progress">
+      <div className={`current-step ${isAwaitingApproval ? 'waiting' : allDone ? 'done' : ''}`}>
+        <div className="current-step-heading">
+          <span className="current-step-icon">{allDone ? '✅' : activeStage?.icon ?? '⚠️'}</span>
+          <div>
+            <span className="current-step-kicker">{allDone ? 'Workflow complete' : 'Currently happening'}</span>
+            <strong>
+              {allDone ? 'The incident investigation is finished' : activeStage?.label ?? 'Investigation stopped'}
+            </strong>
+          </div>
+        </div>
+        <p>
+          {allDone
+            ? 'The system checked the result. Review the summary below.'
+            : activeStage?.description ?? 'Check the error message and try again.'}
+        </p>
+        {!allDone && !isAwaitingApproval && (
+          <span className="current-step-note">This step updates automatically.</span>
+        )}
+        {isAwaitingApproval && (
+          <span className="current-step-note">Nothing will change until you choose an action below.</span>
+        )}
+        {(evidenceCount > 0 || modelName) && (
+          <div className="run-facts">
+            {evidenceCount > 0 && <span>{evidenceCount} signals</span>}
+            {modelName && <span>{modelName}</span>}
+          </div>
+        )}
+      </div>
       <div className="pipeline-track">
         {PIPELINE_STAGES.map((stage, i) => {
           let state: 'pending' | 'completed' | 'active' | 'waiting' | 'error' = 'pending';
@@ -808,12 +856,12 @@ function RunResultBanner({
           </strong>
           <p>
             {isIncidentResolved
-              ? `Remediation verified and incident is fully resolved. ${run.evidence.length} evidence items collected.`
+              ? 'The fix was checked and the incident is resolved.'
               : isRunSuccess
-                ? `Workflow finished with ${run.evidence.length} evidence items collected. Remediation verified. Incident is ready to be closed.`
+                ? 'The workflow finished successfully. You can close the incident.'
                 : isFailed
-                  ? 'The investigation encountered an error. Check the API logs for details.'
-                  : `Run finished with status "${status}".`}
+                  ? 'The investigation stopped because of an error.'
+                  : 'The workflow has stopped.'}
           </p>
         </div>
         {!isIncidentResolved && isRunSuccess && onResolve && (

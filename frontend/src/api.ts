@@ -90,7 +90,16 @@ async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     ...init,
   });
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const body = (await res.json()) as { detail?: string };
+      detail = body.detail ? `: ${body.detail}` : '';
+    } catch {
+      // Keep the status when the server does not return JSON.
+    }
+    throw new Error(`Request failed: ${res.status}${detail}`);
+  }
   return res.json();
 }
 
@@ -166,3 +175,9 @@ export async function startScenario(scenarioKey: string): Promise<Record<string,
   });
 }
 
+export async function generateScenarioTraffic(sampleCount = 8): Promise<void> {
+  const requests = Array.from({ length: sampleCount }, () =>
+    fetch('/shopapi/products', { headers: { Accept: 'application/json' } }),
+  );
+  await Promise.allSettled(requests);
+}
