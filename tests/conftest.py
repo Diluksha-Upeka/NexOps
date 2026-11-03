@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+# Ensure unit tests use fast, deterministic fake provider
+os.environ["LLM_PROVIDER"] = "fake"
+
 from collections.abc import AsyncGenerator
 
 import pytest_asyncio

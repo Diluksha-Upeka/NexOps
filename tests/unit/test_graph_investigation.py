@@ -223,11 +223,14 @@ async def test_route_choices_refinement_loop() -> None:
 @pytest.mark.asyncio
 async def test_bounded_refinement_cycle_max_rounds() -> None:
     """Graph must respect max_investigation_rounds and terminate cleanly."""
+    from app.shopapi.simulator import get_simulator
+    get_simulator().stop_all()
+
     incident: dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "title": "Ambiguous intermittent warning",
         "description": "Routine minor jitter without clear pattern",
-        "service": "shopapi",
+        "service": "shopapi-isolated",
         "severity": "low",
         "scenario_key": None,
     }
