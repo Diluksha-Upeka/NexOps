@@ -52,6 +52,43 @@ export interface Approval {
   decided_at: string | null;
 }
 
+export interface AgentMessage {
+  id: string;
+  timestamp: string;
+  sender_role: string;
+  recipient_role: string;
+  message_type: string;
+  summary: string;
+  payload?: Record<string, unknown>;
+  confidence?: number;
+}
+
+export interface AgentReport {
+  agent_role: string;
+  status: string;
+  duration_ms: number;
+  evidence_count: number;
+  findings_summary: string;
+  confidence: number;
+}
+
+export interface MemoryMatch {
+  pattern_id: string;
+  pattern_key: string;
+  title: string;
+  effective_remediation: string;
+  similarity: number;
+}
+
+export interface ToolExecution {
+  tool_name: string;
+  invoked_by: string;
+  parameters: Record<string, unknown>;
+  success: boolean;
+  latency_ms: number;
+  output_summary: string;
+}
+
 export interface RunDetail {
   id: string;
   status: string;
@@ -62,6 +99,10 @@ export interface RunDetail {
   proposed_action: Record<string, unknown> | null;
   approval: Approval | null;
   is_awaiting_approval: boolean;
+  agent_messages?: AgentMessage[];
+  agent_reports?: AgentReport[];
+  memory_matches?: MemoryMatch[];
+  tool_executions?: ToolExecution[];
   run: {
     id: string;
     status: string;
