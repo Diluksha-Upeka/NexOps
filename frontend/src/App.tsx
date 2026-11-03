@@ -41,7 +41,11 @@ import {
   ExternalLinkIcon,
   BrainIcon,
   TerminalIcon,
+  NetworkIcon,
+  DatabaseIcon,
+  CpuIcon,
 } from './Icons';
+import { MultiAgentView, OrchestrationPage } from './MultiAgentView';
 import './App.css';
 
 /* ── Helpers ── */
@@ -51,7 +55,7 @@ function severityColor(severity: string): string {
   return { critical: 'critical', high: 'high', medium: 'medium', low: 'low' }[severity] ?? 'medium';
 }
 
-type Page = 'dashboard' | 'observability';
+type Page = 'dashboard' | 'orchestration' | 'observability';
 
 /* ── Workflow stage map ── */
 const PIPELINE_STAGES: readonly { key: string; label: string; icon: ReactNode; description: string }[] = [
@@ -283,6 +287,13 @@ function App() {
             )}
           </div>
           <div
+            className={`nav-item ${page === 'orchestration' ? 'active' : ''}`}
+            onClick={() => setPage('orchestration')}
+          >
+            <span className="nav-icon"><NetworkIcon size={18} /></span>
+            Multi-Agent Orchestrator
+          </div>
+          <div
             className={`nav-item ${page === 'observability' ? 'active' : ''}`}
             onClick={() => setPage('observability')}
           >
@@ -352,6 +363,12 @@ function App() {
               onDismissError={() => setActionError(null)}
             />
           )}
+          {page === 'orchestration' && (
+            <OrchestrationPage
+              incidents={incidents}
+              onTriggerSimulation={handleTriggerSimulation}
+            />
+          )}
           {page === 'observability' && <ObservabilityPage />}
         </div>
       </main>
@@ -405,6 +422,7 @@ function DashboardPage({
   onDismissError,
 }: DashboardProps) {
   const [simScenario, setSimScenario] = useState('db_conn_exhaustion');
+  const [viewMode, setViewMode] = useState<'multiagent' | 'timeline'>('multiagent');
 
   const sorted = [...incidents].sort(
     (a, b) => (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3),
@@ -570,74 +588,112 @@ function DashboardPage({
                 </div>
               )}
 
-              {/* Workflow Pipeline */}
-              {(currentRun || investigating) && (
-                <WorkflowPipeline
-                  status={currentRun?.status ?? 'running'}
-                  isAwaitingApproval={currentRun?.is_awaiting_approval ?? false}
-                  investigating={investigating}
-                  evidenceCount={currentRun?.evidence.length ?? 0}
-                  modelName={currentRun?.run.model_name}
-                />
+              {/* View Mode Switcher */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 1.25rem', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card-elevated)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <NetworkIcon size={14} /> Orchestration View:
+                </div>
+                <div className="view-mode-toggle">
+                  <button
+                    className={`view-mode-btn ${viewMode === 'multiagent' ? 'active' : ''}`}
+                    onClick={() => setViewMode('multiagent')}
+                  >
+                    <NetworkIcon size={12} /> Multi-Agent Graph
+                  </button>
+                  <button
+                    className={`view-mode-btn ${viewMode === 'timeline' ? 'active' : ''}`}
+                    onClick={() => setViewMode('timeline')}
+                  >
+                    <ActivityIcon size={12} /> Pipeline Timeline
+                  </button>
+                </div>
+              </div>
+
+              {/* Multi-Agent Orchestration View */}
+              {viewMode === 'multiagent' && (
+                <div style={{ padding: '1.25rem' }}>
+                  <MultiAgentView
+                    currentRun={currentRun}
+                    incident={selectedIncident}
+                    investigating={investigating}
+                    onApproval={onApproval}
+                  />
+                </div>
               )}
 
-              {/* Evidence Cards */}
-              {currentRun && currentRun.evidence.length > 0 && (
-                <div className="evidence-section">
-                  <div className="compact-section-heading">
-                    <strong>What the system found</strong>
-                    <span>{currentRun.evidence.length} signals</span>
-                  </div>
-                  <div className="evidence-grid">
-                    {currentRun.evidence.map((ev, idx) => (
-                      <div className="evidence-card" key={ev.id} style={{ '--stagger': idx } as React.CSSProperties}>
-                        <div className="evidence-card-header">
-                          <span className={`evidence-source-icon ${ev.source_type}`}>
-                            {ev.source_type === 'logs'
-                              ? <FileTextIcon size={14} />
-                              : ev.source_type === 'metrics'
-                                ? <ActivityIcon size={14} />
-                                : ev.source_type === 'traces'
-                                  ? <LinkIcon size={14} />
-                                  : <RocketIcon size={14} />}
-                          </span>
-                          <span className="evidence-source-label">{ev.source_type}</span>
-                          {ev.confidence != null && (
-                            <span className="evidence-confidence">
-                              {(ev.confidence * 100).toFixed(0)}%
+              {/* Classic Timeline View */}
+              {viewMode === 'timeline' && (
+                <>
+                  {/* Workflow Pipeline */}
+                  {(currentRun || investigating) && (
+                    <WorkflowPipeline
+                      status={currentRun?.status ?? 'running'}
+                      isAwaitingApproval={currentRun?.is_awaiting_approval ?? false}
+                      investigating={investigating}
+                      evidenceCount={currentRun?.evidence.length ?? 0}
+                      modelName={currentRun?.run.model_name}
+                    />
+                  )}
+
+                  {/* Evidence Cards */}
+                  {currentRun && currentRun.evidence.length > 0 && (
+                    <div className="evidence-section">
+                      <div className="compact-section-heading">
+                        <strong>What the system found</strong>
+                        <span>{currentRun.evidence.length} signals</span>
+                      </div>
+                      <div className="evidence-grid">
+                        {currentRun.evidence.map((ev, idx) => (
+                          <div className="evidence-card" key={ev.id} style={{ '--stagger': idx } as React.CSSProperties}>
+                            <div className="evidence-card-header">
+                              <span className={`evidence-source-icon ${ev.source_type}`}>
+                                {ev.source_type === 'logs'
+                                  ? <FileTextIcon size={14} />
+                                  : ev.source_type === 'metrics'
+                                    ? <ActivityIcon size={14} />
+                                    : ev.source_type === 'traces'
+                                      ? <LinkIcon size={14} />
+                                      : <RocketIcon size={14} />}
+                              </span>
+                              <span className="evidence-source-label">{ev.source_type}</span>
+                              {ev.confidence != null && (
+                                <span className="evidence-confidence">
+                                  {(ev.confidence * 100).toFixed(0)}%
+                                </span>
+                              )}
+                            </div>
+                            <p className="evidence-summary">{ev.summary}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hypothesis / Root Cause */}
+                  {currentRun && currentRun.hypotheses && currentRun.hypotheses.length > 0 && (
+                    <div className="hypothesis-section">
+                      {currentRun.hypotheses.slice(0, 1).map((h, i) => (
+                        <div className="hypothesis-card" key={i}>
+                          <div className="hypothesis-header">
+                            <span className="hypothesis-title">
+                              <TargetIcon size={18} /> Most likely cause
                             </span>
+                            <ConfidenceRing value={h.confidence} />
+                          </div>
+                          <strong className="hypothesis-name">{h.title}</strong>
+                          <p className="hypothesis-desc">{h.description}</p>
+                          {h.supporting_evidence_ids.length > 0 && (
+                            <p className="hypothesis-citations">
+                              Citing {h.supporting_evidence_ids.length} evidence item(s)
+                              {h.contradictions.length > 0 &&
+                                ` · ${h.contradictions.length} contradiction(s)`}
+                            </p>
                           )}
                         </div>
-                        <p className="evidence-summary">{ev.summary}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Hypothesis / Root Cause */}
-              {currentRun && currentRun.hypotheses && currentRun.hypotheses.length > 0 && (
-                <div className="hypothesis-section">
-                  {currentRun.hypotheses.slice(0, 1).map((h, i) => (
-                    <div className="hypothesis-card" key={i}>
-                      <div className="hypothesis-header">
-                        <span className="hypothesis-title">
-                          <TargetIcon size={18} /> Most likely cause
-                        </span>
-                        <ConfidenceRing value={h.confidence} />
-                      </div>
-                      <strong className="hypothesis-name">{h.title}</strong>
-                      <p className="hypothesis-desc">{h.description}</p>
-                      {h.supporting_evidence_ids.length > 0 && (
-                        <p className="hypothesis-citations">
-                          Citing {h.supporting_evidence_ids.length} evidence item(s)
-                          {h.contradictions.length > 0 &&
-                            ` · ${h.contradictions.length} contradiction(s)`}
-                        </p>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
 
               {/* Run result */}

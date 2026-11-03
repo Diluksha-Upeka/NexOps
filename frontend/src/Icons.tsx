@@ -315,3 +315,50 @@ export function TerminalIcon(p: IconProps) {
   );
 }
 
+export function NetworkIcon(p: IconProps) {
+  return (
+    <svg {...defaults(p)}>
+      <circle cx="12" cy="5" r="3" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="5" cy="19" r="3" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="19" cy="19" r="3" stroke="currentColor" strokeWidth="1.8" />
+      <line x1="12" y1="8" x2="5" y2="16" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="12" y1="8" x2="19" y2="16" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+export function DatabaseIcon(p: IconProps) {
+  return (
+    <svg {...defaults(p)}>
+      <ellipse cx="12" cy="5" rx="9" ry="3" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+export function CpuIcon(p: IconProps) {
+  return (
+    <svg {...defaults(p)}>
+      <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="9" y="9" width="6" height="6" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="9" y1="1" x2="9" y2="4" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="15" y1="1" x2="15" y2="4" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="9" y1="20" x2="9" y2="23" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="15" y1="20" x2="15" y2="23" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="20" y1="9" x2="23" y2="9" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="20" y1="15" x2="23" y2="15" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="1" y1="9" x2="4" y2="9" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="1" y1="15" x2="4" y2="15" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+export function MessageSquareIcon(p: IconProps) {
+  return (
+    <svg {...defaults(p)}>
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
