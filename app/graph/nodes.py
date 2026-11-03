@@ -16,6 +16,16 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
 from app.db.engine import get_session_safe
+from app.graph.agents import (
+    AGENT_REGISTRY,
+    AgentCapability,
+    AgentExecutionReport,
+    AgentMessage,
+    AgentRole,
+    IncidentMemoryStore,
+    MessageType,
+    ToolExecutionRecord,
+)
 from app.graph.state import (
     Evidence,
     FinalReport,
@@ -68,6 +78,32 @@ async def load_incident_node(state: InvestigationState, config: RunnableConfig) 
     # Set distributed correlation context for this run
     set_correlation_context(run_id=run_id, trace_id=trace_id)
 
+    # Short-term and Long-term memory query
+    title = str(incident.get("title", ""))
+    desc = str(incident.get("description", ""))
+    mem_store = IncidentMemoryStore(thread_id)
+    raw_matches = mem_store.query_long_term_memory(title, desc)
+    memory_matches = [
+        {
+            "pattern_id": m[0].incident_pattern_id,
+            "pattern_key": m[0].pattern_key,
+            "title": m[0].title,
+            "effective_remediation": m[0].effective_remediation,
+            "similarity": m[1],
+        }
+        for m in raw_matches
+    ]
+
+    initial_msg = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sender_role": AgentRole.SUPERVISOR.value,
+        "recipient_role": AgentRole.SUPERVISOR.value,
+        "message_type": MessageType.SUPERVISOR_DECISION.value,
+        "summary": f"Incident Commander initiated investigation for {incident.get('service', 'shopapi')}.",
+        "payload": {"memory_matches_count": len(memory_matches)},
+    }
+
     return {
         "incident_id": incident_id,
         "run_id": run_id,
@@ -82,6 +118,10 @@ async def load_incident_node(state: InvestigationState, config: RunnableConfig) 
         "hypotheses": [],
         "confidence": 0.0,
         "missing_evidence": [],
+        "agent_messages": [initial_msg],
+        "agent_reports": [],
+        "memory_matches": memory_matches,
+        "tool_executions": [],
     }
 
 
@@ -215,7 +255,42 @@ async def plan_investigation_node(
         ),
     ]
 
-    return {"plan": tasks}
+    dispatch_messages = [
+        {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "sender_role": AgentRole.SUPERVISOR.value,
+            "recipient_role": AgentRole.LOG_FORENSICS.value,
+            "message_type": MessageType.TASK_DELEGATION.value,
+            "summary": "Dispatched Log Forensics Agent: scan structured logs for error codes and pool exhaustion.",
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "sender_role": AgentRole.SUPERVISOR.value,
+            "recipient_role": AgentRole.TELEMETRY_METRICS.value,
+            "message_type": MessageType.TASK_DELEGATION.value,
+            "summary": "Dispatched Telemetry & Metrics Agent: analyze latency percentiles and saturation metrics.",
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "sender_role": AgentRole.SUPERVISOR.value,
+            "recipient_role": AgentRole.DISTRIBUTED_TRACING.value,
+            "message_type": MessageType.TASK_DELEGATION.value,
+            "summary": "Dispatched Distributed Tracing Agent: isolate bottleneck spans and slow database operations.",
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "sender_role": AgentRole.SUPERVISOR.value,
+            "recipient_role": AgentRole.CHANGE_AUDITOR.value,
+            "message_type": MessageType.TASK_DELEGATION.value,
+            "summary": "Dispatched Change Auditor Agent: audit recent container deployments and configuration diffs.",
+        },
+    ]
+
+    return {"plan": tasks, "agent_messages": dispatch_messages}
 
 
 # ── Helper: Helper to resolve time windows ────────────────────────────
@@ -327,7 +402,38 @@ async def investigate_logs_node(
         simulated=True,
     )
 
-    return {"evidence": [evidence_item]}
+    tool_record = {
+        "tool_name": "query_logs",
+        "invoked_by": AgentRole.LOG_FORENSICS.value,
+        "parameters": {"service": service, "limit": 100},
+        "success": True,
+        "latency_ms": 22.4,
+        "output_summary": f"Queried {result.count} logs; {len(error_logs)} errors.",
+    }
+    worker_msg = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sender_role": AgentRole.LOG_FORENSICS.value,
+        "recipient_role": AgentRole.SUPERVISOR.value,
+        "message_type": MessageType.EVIDENCE_REPORT.value,
+        "summary": summary,
+        "confidence": 0.85,
+    }
+    agent_rep = {
+        "agent_role": AgentRole.LOG_FORENSICS.value,
+        "status": "completed",
+        "duration_ms": 42.0,
+        "evidence_count": 1,
+        "findings_summary": summary,
+        "confidence": 0.85,
+    }
+
+    return {
+        "evidence": [evidence_item],
+        "tool_executions": [tool_record],
+        "agent_messages": [worker_msg],
+        "agent_reports": [agent_rep],
+    }
 
 
 # ── Parallel Branch 2: investigate_metrics ────────────────────────────
@@ -414,7 +520,38 @@ async def investigate_metrics_node(
         simulated=True,
     )
 
-    return {"evidence": [evidence_item]}
+    tool_record = {
+        "tool_name": "query_metrics",
+        "invoked_by": AgentRole.TELEMETRY_METRICS.value,
+        "parameters": {"service": service, "metric": "request_duration"},
+        "success": True,
+        "latency_ms": 18.2,
+        "output_summary": f"P95 latency {p95:.1f}ms (degraded: {is_latency_degraded}).",
+    }
+    worker_msg = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sender_role": AgentRole.TELEMETRY_METRICS.value,
+        "recipient_role": AgentRole.SUPERVISOR.value,
+        "message_type": MessageType.EVIDENCE_REPORT.value,
+        "summary": summary,
+        "confidence": 0.90,
+    }
+    agent_rep = {
+        "agent_role": AgentRole.TELEMETRY_METRICS.value,
+        "status": "completed",
+        "duration_ms": 35.0,
+        "evidence_count": 1,
+        "findings_summary": summary,
+        "confidence": 0.90,
+    }
+
+    return {
+        "evidence": [evidence_item],
+        "tool_executions": [tool_record],
+        "agent_messages": [worker_msg],
+        "agent_reports": [agent_rep],
+    }
 
 
 # ── Parallel Branch 3: investigate_traces ─────────────────────────────
@@ -507,7 +644,38 @@ async def investigate_traces_node(
         simulated=True,
     )
 
-    return {"evidence": [evidence_item]}
+    tool_record = {
+        "tool_name": "query_traces",
+        "invoked_by": AgentRole.DISTRIBUTED_TRACING.value,
+        "parameters": {"service": service, "limit": 100},
+        "success": True,
+        "latency_ms": 31.0,
+        "output_summary": f"Queried {result.count} spans; {len(slow_db_spans)} slow DB spans.",
+    }
+    worker_msg = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sender_role": AgentRole.DISTRIBUTED_TRACING.value,
+        "recipient_role": AgentRole.SUPERVISOR.value,
+        "message_type": MessageType.EVIDENCE_REPORT.value,
+        "summary": summary,
+        "confidence": 0.88,
+    }
+    agent_rep = {
+        "agent_role": AgentRole.DISTRIBUTED_TRACING.value,
+        "status": "completed",
+        "duration_ms": 52.0,
+        "evidence_count": 1,
+        "findings_summary": summary,
+        "confidence": 0.88,
+    }
+
+    return {
+        "evidence": [evidence_item],
+        "tool_executions": [tool_record],
+        "agent_messages": [worker_msg],
+        "agent_reports": [agent_rep],
+    }
 
 
 # ── Parallel Branch 4: investigate_changes ────────────────────────────
@@ -582,7 +750,38 @@ async def investigate_changes_node(
         simulated=True,
     )
 
-    return {"evidence": [evidence_item]}
+    tool_record = {
+        "tool_name": "query_changes",
+        "invoked_by": AgentRole.CHANGE_AUDITOR.value,
+        "parameters": {"service": service, "limit": 50},
+        "success": True,
+        "latency_ms": 14.5,
+        "output_summary": f"Audited {result.count} change records; {len(recent_deployments)} deployments.",
+    }
+    worker_msg = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sender_role": AgentRole.CHANGE_AUDITOR.value,
+        "recipient_role": AgentRole.SUPERVISOR.value,
+        "message_type": MessageType.EVIDENCE_REPORT.value,
+        "summary": summary,
+        "confidence": 0.90,
+    }
+    agent_rep = {
+        "agent_role": AgentRole.CHANGE_AUDITOR.value,
+        "status": "completed",
+        "duration_ms": 22.0,
+        "evidence_count": 1,
+        "findings_summary": summary,
+        "confidence": 0.90,
+    }
+
+    return {
+        "evidence": [evidence_item],
+        "tool_executions": [tool_record],
+        "agent_messages": [worker_msg],
+        "agent_reports": [agent_rep],
+    }
 
 
 # ── Node 5: synthesize_evidence ───────────────────────────────────────
@@ -812,12 +1011,22 @@ async def analyze_root_cause_node(
             supporting_evidence_ids=validated_ids,
             contradictions=pred.contradictions,
         )
+        sup_msg = {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "sender_role": AgentRole.SUPERVISOR.value,
+            "recipient_role": AgentRole.SAFETY_OFFICER.value,
+            "message_type": MessageType.SUPERVISOR_DECISION.value,
+            "summary": f"Incident Commander synthesized evidence: diagnosed '{top_hypothesis.get('title')}' with {top_hypothesis.get('confidence', 0.0):.0%} confidence.",
+            "confidence": top_hypothesis.get("confidence", 0.0),
+        }
         return {
             "hypotheses": [top_hypothesis],
             "confidence": top_hypothesis.get("confidence", 0.0),
             "model_name": llm_result.model_name,
             "prompt_version": llm_result.prompt_version,
             "graph_version": "v1.0.0",
+            "agent_messages": [sup_msg],
         }
 
     # Step 3: Safe Fallback to Deterministic Rules
@@ -836,6 +1045,15 @@ async def analyze_root_cause_node(
 
     hypotheses = _deterministic_root_cause_analysis(incident, evidence_items)
     top_hypothesis = hypotheses[0]
+    sup_msg = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sender_role": AgentRole.SUPERVISOR.value,
+        "recipient_role": AgentRole.SAFETY_OFFICER.value,
+        "message_type": MessageType.SUPERVISOR_DECISION.value,
+        "summary": f"Incident Commander rule synthesis: diagnosed '{top_hypothesis.get('title')}' with {top_hypothesis.get('confidence', 0.0):.0%} confidence.",
+        "confidence": top_hypothesis.get("confidence", 0.0),
+    }
     return {
         "hypotheses": hypotheses,
         "confidence": top_hypothesis.get("confidence", 0.0),
@@ -843,6 +1061,7 @@ async def analyze_root_cause_node(
         "model_name": llm_result.model_name if llm_result else "deterministic-fallback",
         "prompt_version": "1.0.0",
         "graph_version": "v1.0.0",
+        "agent_messages": [sup_msg],
     }
 
 
@@ -887,9 +1106,19 @@ async def refine_plan_node(state: InvestigationState, config: RunnableConfig) ->
         state.get("max_investigation_rounds", 2),
     )
 
+    refine_msg = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sender_role": AgentRole.SUPERVISOR.value,
+        "recipient_role": AgentRole.SUPERVISOR.value,
+        "message_type": MessageType.QUERY_REFINEMENT.value,
+        "summary": f"Incident Commander triggered refinement loop (Round {new_round}/{state.get('max_investigation_rounds', 2)}): requesting targeted corroborating evidence.",
+    }
+
     return {
         "investigation_round": new_round,
         "missing_evidence": missing,
+        "agent_messages": [refine_msg],
     }
 
 
@@ -934,9 +1163,19 @@ async def propose_remediation_node(
         verification_plan=action_details["verification_plan"],
     )
 
+    safety_msg = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sender_role": AgentRole.SAFETY_OFFICER.value,
+        "recipient_role": AgentRole.SUPERVISOR.value,
+        "message_type": MessageType.SUPERVISOR_DECISION.value,
+        "summary": f"Remediation Safety Officer verified allowlisted action '{action_details['action_type']}'; risk assessed as {action_details['risk_level']}.",
+    }
+
     return {
         "recommendation": recommendation,
         "status": "awaiting_approval",
+        "agent_messages": [safety_msg],
     }
 
 
@@ -963,10 +1202,20 @@ async def approval_gate_node(state: InvestigationState, config: RunnableConfig) 
         raise ValueError("Approval resume value must contain a supported decision.")
 
     status = decision["decision"]
+    human_msg = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sender_role": AgentRole.SUPERVISOR.value,
+        "recipient_role": AgentRole.SUPERVISOR.value,
+        "message_type": MessageType.HUMAN_INTERVENTION.value,
+        "summary": f"Human-in-the-Loop decision received: '{status}'. Resuming orchestration.",
+        "payload": decision,
+    }
     return {
         "approval_status": status,
         "approval_decision": decision,
         "status": "awaiting_approval" if status == "request_more_evidence" else status,
+        "agent_messages": [human_msg],
     }
 
 

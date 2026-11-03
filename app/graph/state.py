@@ -188,6 +188,12 @@ class InvestigationState(TypedDict, total=False):
     remediation_result: RemediationOutcome | None
     verification_result: VerificationOutcome | None
 
+    # Multi-Agent Orchestration & Memory
+    agent_messages: Annotated[list[dict[str, Any]], operator.add]
+    agent_reports: Annotated[list[dict[str, Any]], operator.add]
+    memory_matches: list[dict[str, Any]]
+    tool_executions: Annotated[list[dict[str, Any]], operator.add]
+
     # Metadata & Provenance
     model_name: str
     prompt_version: str
