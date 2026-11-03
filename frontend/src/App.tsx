@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   createIncident,
   fetchHealth,
@@ -14,6 +14,34 @@ import {
   type Incident,
   type RunDetail,
 } from './api';
+import {
+  NexOpsLogo,
+  DashboardIcon,
+  SignalIcon,
+  BookIcon,
+  ChartIcon,
+  SearchIcon,
+  ActivityIcon,
+  ShieldIcon,
+  ToolIcon,
+  TargetIcon,
+  LightbulbIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  AlertTriangleIcon,
+  ClipboardListIcon,
+  FlameIcon,
+  HeartPulseIcon,
+  FileTextIcon,
+  LinkIcon,
+  RocketIcon,
+  RefreshIcon,
+  InboxIcon,
+  ZapIcon,
+  ExternalLinkIcon,
+  BrainIcon,
+  TerminalIcon,
+} from './Icons';
 import './App.css';
 
 /* ── Helpers ── */
@@ -26,14 +54,14 @@ function severityColor(severity: string): string {
 type Page = 'dashboard' | 'observability';
 
 /* ── Workflow stage map ── */
-const PIPELINE_STAGES = [
-  { key: 'triage', label: 'Triage', icon: '🔍', description: 'Understanding the incident' },
-  { key: 'evidence', label: 'Evidence', icon: '📊', description: 'Collecting logs, metrics, traces, and changes' },
-  { key: 'analysis', label: 'Analysis', icon: '🧠', description: 'Finding the most likely cause' },
-  { key: 'proposal', label: 'Proposal', icon: '💡', description: 'Preparing a safe action' },
-  { key: 'approval', label: 'Approval', icon: '🛡️', description: 'Waiting for your decision' },
-  { key: 'remediation', label: 'Fix', icon: '🔧', description: 'Applying the approved sandbox fix' },
-  { key: 'verification', label: 'Verify', icon: '✅', description: 'Checking that the service recovered' },
+const PIPELINE_STAGES: readonly { key: string; label: string; icon: ReactNode; description: string }[] = [
+  { key: 'triage', label: 'Triage', icon: <SearchIcon size={18} />, description: 'Understanding the incident' },
+  { key: 'evidence', label: 'Evidence', icon: <ActivityIcon size={18} />, description: 'Collecting logs, metrics, traces, and changes' },
+  { key: 'analysis', label: 'Analysis', icon: <BrainIcon size={18} />, description: 'Finding the most likely cause' },
+  { key: 'proposal', label: 'Proposal', icon: <LightbulbIcon size={18} />, description: 'Preparing a safe action' },
+  { key: 'approval', label: 'Approval', icon: <ShieldIcon size={18} />, description: 'Waiting for your decision' },
+  { key: 'remediation', label: 'Fix', icon: <ToolIcon size={18} />, description: 'Applying the approved sandbox fix' },
+  { key: 'verification', label: 'Verify', icon: <CheckCircleIcon size={18} />, description: 'Checking that the service recovered' },
 ] as const;
 
 function resolveStageIndex(status: string, isAwaitingApproval: boolean): number {
@@ -235,7 +263,7 @@ function App() {
       {/* ── Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="brand-icon">⚡</div>
+          <NexOpsLogo size={34} className="brand-logo" />
           <div className="brand-text">
             <h1>NexOps</h1>
             <span>Incident Response</span>
@@ -248,7 +276,7 @@ function App() {
             className={`nav-item ${page === 'dashboard' ? 'active' : ''}`}
             onClick={() => setPage('dashboard')}
           >
-            <span className="nav-icon">📋</span>
+            <span className="nav-icon"><DashboardIcon size={18} /></span>
             Dashboard
             {openCount + investigatingCount > 0 && (
               <span className="nav-badge">{openCount + investigatingCount}</span>
@@ -258,7 +286,7 @@ function App() {
             className={`nav-item ${page === 'observability' ? 'active' : ''}`}
             onClick={() => setPage('observability')}
           >
-            <span className="nav-icon">📡</span>
+            <span className="nav-icon"><SignalIcon size={18} /></span>
             Observability
           </div>
 
@@ -270,8 +298,9 @@ function App() {
             rel="noreferrer"
             style={{ textDecoration: 'none' }}
           >
-            <span className="nav-icon">📖</span>
+            <span className="nav-icon"><BookIcon size={18} /></span>
             API Docs
+            <ExternalLinkIcon size={12} style={{ marginLeft: 'auto', opacity: 0.4 }} />
           </a>
           <a
             className="nav-item"
@@ -280,8 +309,9 @@ function App() {
             rel="noreferrer"
             style={{ textDecoration: 'none' }}
           >
-            <span className="nav-icon">📈</span>
+            <span className="nav-icon"><ChartIcon size={18} /></span>
             Metrics
+            <ExternalLinkIcon size={12} style={{ marginLeft: 'auto', opacity: 0.4 }} />
           </a>
         </nav>
 
@@ -383,43 +413,28 @@ function DashboardPage({
   return (
     <>
       {/* Page Header */}
-      <div
-        className="page-header"
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem',
-        }}
-      >
+      <div className="page-header">
         <div>
           <h1 className="page-title">Incident Dashboard</h1>
           <p className="page-subtitle">Select an incident, then follow each step.</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+        <div className="header-actions">
           <select
             value={simScenario}
             onChange={(e) => setSimScenario(e.target.value)}
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-accent)',
-              color: 'var(--text-primary)',
-              padding: '0.45rem 0.75rem',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.8rem',
-            }}
+            className="scenario-select"
           >
-            <option value="db_conn_exhaustion">⚡ DB Pool Exhaustion (Critical)</option>
-            <option value="db_latency">⏱️ ShopAPI High Latency (High)</option>
-            <option value="bad_release">⚠️ Bad Release Degradation (Medium)</option>
+            <option value="db_conn_exhaustion">DB Pool Exhaustion (Critical)</option>
+            <option value="db_latency">ShopAPI High Latency (High)</option>
+            <option value="bad_release">Bad Release Degradation (Medium)</option>
           </select>
           <button
             className="simulate-btn"
             onClick={() => onTriggerSimulation(simScenario)}
             disabled={simulating}
           >
-            {simulating ? 'Preparing…' : '⚡ New test'}
+            <ZapIcon size={14} />
+            {simulating ? 'Preparing…' : 'New test'}
           </button>
         </div>
       </div>
@@ -427,7 +442,7 @@ function DashboardPage({
       {/* Error Banner */}
       {actionError && (
         <div className="error-banner">
-          <span>⚠️</span>
+          <AlertTriangleIcon size={18} />
           <p>{actionError}</p>
           <button onClick={onDismissError}>Dismiss</button>
         </div>
@@ -435,27 +450,27 @@ function DashboardPage({
 
       {/* Stat Cards */}
       <div className="stats-grid">
-        <div className="stat-card blue">
+        <div className="stat-card blue" style={{ '--stagger': 0 } as React.CSSProperties}>
           <div className="stat-label">Incidents</div>
           <div className="stat-value">{totalIncidents}</div>
           <div className="stat-detail">All incidents</div>
-          <span className="stat-icon">📋</span>
+          <span className="stat-icon"><ClipboardListIcon size={28} /></span>
         </div>
-        <div className="stat-card amber">
+        <div className="stat-card amber" style={{ '--stagger': 1 } as React.CSSProperties}>
           <div className="stat-label">Active</div>
           <div className="stat-value">{openCount + investigatingCount}</div>
           <div className="stat-detail">{openCount} open · {investigatingCount} running</div>
-          <span className="stat-icon">🔥</span>
+          <span className="stat-icon"><FlameIcon size={28} /></span>
         </div>
-        <div className="stat-card green">
+        <div className="stat-card green" style={{ '--stagger': 2 } as React.CSSProperties}>
           <div className="stat-label">Resolved</div>
           <div className="stat-value">{resolvedCount}</div>
           <div className="stat-detail">Finished</div>
-          <span className="stat-icon">✅</span>
+          <span className="stat-icon"><CheckCircleIcon size={28} /></span>
         </div>
-        <div className="stat-card purple">
+        <div className="stat-card purple" style={{ '--stagger': 3 } as React.CSSProperties}>
           <div className="stat-label">System Health</div>
-          <div className="stat-value">{health ? '●' : healthError ? '✕' : '…'}</div>
+          <div className="stat-value">{health ? <HeartPulseIcon size={28} /> : healthError ? <XCircleIcon size={28} /> : <span className="loading-spinner" />}</div>
           <div className="stat-detail">
             {health
               ? `API ${health.status} · DB ${health.checks.database}`
@@ -463,7 +478,7 @@ function DashboardPage({
                 ? 'Backend unreachable'
                 : 'Connecting…'}
           </div>
-          <span className="stat-icon">💎</span>
+          <span className="stat-icon"><HeartPulseIcon size={28} /></span>
         </div>
       </div>
 
@@ -473,14 +488,14 @@ function DashboardPage({
         <div className="section-card">
           <div className="section-header">
             <span className="section-title">
-              <span className="icon">🚨</span>
+              <span className="icon"><AlertTriangleIcon size={16} /></span>
               Incidents
             </span>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{totalIncidents} total</span>
           </div>
           {sorted.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-icon">📭</div>
+              <div className="empty-icon"><InboxIcon size={48} /></div>
               <p>No incidents yet.<br />Seed demo data to get started.</p>
             </div>
           ) : (
@@ -529,20 +544,20 @@ function DashboardPage({
                         className="incident-action-btn"
                         onClick={() => onInvestigate(selectedIncident)}
                       >
-                        ▶ Investigate
+                        <PlayIconSmall /> Investigate
                       </button>
                       <button
                         className="incident-action-btn resolve"
                         onClick={() => onResolveIncident(selectedIncident)}
                         title="Mark incident as resolved"
                       >
-                        ✓ Mark Resolved
+                        <CheckSmall /> Mark Resolved
                       </button>
                     </>
                   )}
                   {selectedIncident.status === 'resolved' && (
                     <span className="incident-status-badge resolved" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>
-                      ✓ Resolved
+                      <CheckSmall /> Resolved
                     </span>
                   )}
                 </div>
@@ -574,17 +589,17 @@ function DashboardPage({
                     <span>{currentRun.evidence.length} signals</span>
                   </div>
                   <div className="evidence-grid">
-                    {currentRun.evidence.map((ev) => (
-                      <div className="evidence-card" key={ev.id}>
+                    {currentRun.evidence.map((ev, idx) => (
+                      <div className="evidence-card" key={ev.id} style={{ '--stagger': idx } as React.CSSProperties}>
                         <div className="evidence-card-header">
                           <span className={`evidence-source-icon ${ev.source_type}`}>
                             {ev.source_type === 'logs'
-                              ? '📝'
+                              ? <FileTextIcon size={14} />
                               : ev.source_type === 'metrics'
-                                ? '📊'
+                                ? <ActivityIcon size={14} />
                                 : ev.source_type === 'traces'
-                                  ? '🔗'
-                                  : '🚀'}
+                                  ? <LinkIcon size={14} />
+                                  : <RocketIcon size={14} />}
                           </span>
                           <span className="evidence-source-label">{ev.source_type}</span>
                           {ev.confidence != null && (
@@ -607,7 +622,7 @@ function DashboardPage({
                     <div className="hypothesis-card" key={i}>
                       <div className="hypothesis-header">
                         <span className="hypothesis-title">
-                          🎯 Most likely cause
+                          <TargetIcon size={18} /> Most likely cause
                         </span>
                         <ConfidenceRing value={h.confidence} />
                       </div>
@@ -639,7 +654,7 @@ function DashboardPage({
             {currentRun?.is_awaiting_approval && currentRun.approval && (
               <div className="approval-panel">
                 <div className="approval-header">
-                  <div className="approval-icon">🛡️</div>
+                  <div className="approval-icon"><ShieldIcon size={20} /></div>
                   <div>
                     <div className="approval-title">Your decision is needed</div>
                     <div className="approval-subtitle">
@@ -649,7 +664,7 @@ function DashboardPage({
                 </div>
                 <div className="approval-body">
                   <div className="approval-action-tag">
-                    ⚙️ {currentRun.approval.action_type}
+                    <TerminalIcon size={14} /> {currentRun.approval.action_type}
                   </div>
                   <p className="approval-reasoning">{currentRun.approval.reasoning}</p>
                   <span className={`approval-risk ${currentRun.approval.risk}`}>
@@ -657,16 +672,16 @@ function DashboardPage({
                   </span>
                   <div className="approval-actions">
                     <button className="btn btn-approve" onClick={() => onApproval('approved')}>
-                      ✓ Approve Action
+                      <CheckSmall /> Approve Action
                     </button>
                     <button className="btn btn-reject" onClick={() => onApproval('rejected')}>
-                      ✕ Reject
+                      <XSmall /> Reject
                     </button>
                     <button
                       className="btn btn-secondary"
                       onClick={() => onApproval('request_more_evidence')}
                     >
-                      🔄 Request More Evidence
+                      <RefreshIcon size={14} /> Request More Evidence
                     </button>
                   </div>
                 </div>
@@ -686,11 +701,35 @@ function DashboardPage({
       {/* Footer */}
       <footer className="page-footer">
         <p>
-          ⚠️ This is a <strong>simulated</strong> incident response system. All remediation is
+          <AlertTriangleIcon size={12} style={{ verticalAlign: 'middle', marginRight: '0.35rem' }} />
+          This is a <strong>simulated</strong> incident response system. All remediation is
           sandboxed — nothing touches real infrastructure.
         </p>
       </footer>
     </>
+  );
+}
+
+/* ── Tiny inline icon helpers for buttons ── */
+function PlayIconSmall() {
+  return (
+    <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor" style={{ marginRight: '0.25rem' }}>
+      <polygon points="0,0 10,6 0,12" />
+    </svg>
+  );
+}
+function CheckSmall() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.2rem' }}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+function XSmall() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" style={{ marginRight: '0.2rem' }}>
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
   );
 }
 
@@ -725,7 +764,11 @@ function WorkflowPipeline({
     <div className="workflow-progress">
       <div className={`current-step ${isAwaitingApproval ? 'waiting' : allDone ? 'done' : ''}`}>
         <div className="current-step-heading">
-          <span className="current-step-icon">{allDone ? '✅' : activeStage?.icon ?? '⚠️'}</span>
+          <span className="current-step-icon">
+            {allDone
+              ? <CheckCircleIcon size={22} />
+              : activeStage?.icon ?? <AlertTriangleIcon size={22} />}
+          </span>
           <div>
             <span className="current-step-kicker">{allDone ? 'Workflow complete' : 'Currently happening'}</span>
             <strong>
@@ -842,7 +885,13 @@ function RunResultBanner({
         }`}
       >
         <span className="result-icon">
-          {isIncidentResolved ? '✅' : isRunSuccess ? '🎯' : isFailed ? '❌' : '📋'}
+          {isIncidentResolved
+            ? <CheckCircleIcon size={24} />
+            : isRunSuccess
+              ? <TargetIcon size={24} />
+              : isFailed
+                ? <XCircleIcon size={24} />
+                : <ClipboardListIcon size={24} />}
         </span>
         <div className="result-text" style={{ flex: 1 }}>
           <strong>
@@ -870,7 +919,7 @@ function RunResultBanner({
             onClick={onResolve}
             style={{ marginLeft: 'auto', alignSelf: 'center' }}
           >
-            ✓ Mark Incident Resolved
+            <CheckSmall /> Mark Incident Resolved
           </button>
         )}
       </div>
@@ -897,7 +946,7 @@ function ObservabilityPage() {
       <div className="section-card">
         <div className="section-header">
           <span className="section-title">
-            <span className="icon">🔗</span>
+            <span className="icon"><LinkIcon size={16} /></span>
             External Services
           </span>
         </div>
@@ -926,32 +975,26 @@ function ObservabilityPage() {
       </div>
 
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        <div className="section-card" style={{ padding: '1.5rem' }}>
-          <div style={{ fontSize: '1.5rem', marginBottom: '0.75rem' }}>📊</div>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-            Prometheus Metrics
-          </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+        <div className="section-card obs-feature-card" style={{ '--stagger': 0 } as React.CSSProperties}>
+          <div className="obs-feature-icon"><ActivityIcon size={24} /></div>
+          <h3>Prometheus Metrics</h3>
+          <p>
             Route-template cardinality-safe metrics including HTTP request counts, latency histograms
             (P50/P95/P99), error rates, and simulator fault gauges.
           </p>
         </div>
-        <div className="section-card" style={{ padding: '1.5rem' }}>
-          <div style={{ fontSize: '1.5rem', marginBottom: '0.75rem' }}>🔍</div>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-            OpenTelemetry Tracing
-          </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+        <div className="section-card obs-feature-card" style={{ '--stagger': 1 } as React.CSSProperties}>
+          <div className="obs-feature-icon"><SearchIcon size={24} /></div>
+          <h3>OpenTelemetry Tracing</h3>
+          <p>
             W3C traceparent propagation across API endpoints, LangGraph nodes, and evidence tool
             calls. Spans are exported via OTLP/HTTP to Jaeger.
           </p>
         </div>
-        <div className="section-card" style={{ padding: '1.5rem' }}>
-          <div style={{ fontSize: '1.5rem', marginBottom: '0.75rem' }}>📝</div>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-            Structured Logging
-          </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+        <div className="section-card obs-feature-card" style={{ '--stagger': 2 } as React.CSSProperties}>
+          <div className="obs-feature-icon"><FileTextIcon size={24} /></div>
+          <h3>Structured Logging</h3>
+          <p>
             JSON-formatted logs with trace ID and span ID correlation. Structured metadata enables
             filtering by run ID, incident ID, and scenario key.
           </p>
@@ -959,41 +1002,31 @@ function ObservabilityPage() {
       </div>
 
       <div className="section-card" style={{ padding: '1.5rem' }}>
-        <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem' }}>
-          🚀 How to Start the Observability Stack
+        <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <TerminalIcon size={18} /> How to Start the Observability Stack
         </h3>
-        <div
-          style={{
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-md)',
-            padding: '1rem',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.8rem',
-            color: 'var(--accent-cyan)',
-            lineHeight: 1.6,
-          }}
-        >
-          <div style={{ color: 'var(--text-muted)' }}># Start Prometheus, Grafana, and Jaeger</div>
+        <div className="code-block">
+          <div className="code-comment"># Start Prometheus, Grafana, and Jaeger</div>
           <div>docker compose --profile observability up -d</div>
           <br />
-          <div style={{ color: 'var(--text-muted)' }}># Then visit:</div>
+          <div className="code-comment"># Then visit:</div>
           <div>
-            Grafana → <span style={{ color: 'var(--accent-amber)' }}>http://localhost:3000</span>{' '}
+            Grafana → <span className="code-highlight">http://localhost:3000</span>{' '}
             (admin/admin)
           </div>
           <div>
-            Jaeger → <span style={{ color: 'var(--accent-amber)' }}>http://localhost:16686</span>
+            Jaeger → <span className="code-highlight">http://localhost:16686</span>
           </div>
           <div>
-            Prometheus → <span style={{ color: 'var(--accent-amber)' }}>http://localhost:9090</span>
+            Prometheus → <span className="code-highlight">http://localhost:9090</span>
           </div>
         </div>
       </div>
 
       <footer className="page-footer">
         <p>
-          ⚠️ Observability services require <strong>Docker Compose</strong> with the{' '}
+          <AlertTriangleIcon size={12} style={{ verticalAlign: 'middle', marginRight: '0.35rem' }} />
+          Observability services require <strong>Docker Compose</strong> with the{' '}
           <strong>observability</strong> profile enabled.
         </p>
       </footer>
