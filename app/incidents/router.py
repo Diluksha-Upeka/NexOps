@@ -46,6 +46,7 @@ from app.remediation.catalog import get_action_definition
 
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[Any]] = set()
+_run_agent_state: dict[uuid.UUID, dict[str, Any]] = {}
 
 router = APIRouter(prefix="/api/v1", tags=["incidents"])
 
@@ -198,6 +199,20 @@ async def _execute_run(
                 checkpointer=get_checkpointer(),
                 resume_value=resume_value,
             )
+
+            # Store multi-agent state (messages, reports, memory matches, tool executions)
+            _run_agent_state[run_id] = {
+                "agent_messages": result.get("agent_messages", []),
+                "agent_reports": result.get("agent_reports", []),
+                "memory_matches": result.get("memory_matches", []),
+                "tool_executions": result.get("tool_executions", []),
+                "hypotheses": [dict(h) for h in result.get("hypotheses", [])],
+                "proposed_action": result.get("recommendation"),
+            }
+
+            for msg in result.get("agent_messages", []):
+                await svc.append_run_event(run_id, "agent_message", msg)
+
             for item in result.get("evidence", []):
                 await svc.add_evidence(
                     run_id=run_id,
@@ -295,6 +310,7 @@ async def get_run(
     if approval is None:
         approvals = await svc.list_approvals_for_run(run_id)
         approval = approvals[0] if approvals else None
+    agent_state = _run_agent_state.get(run_id, {})
     return RunDetailResponse(
         run=InvestigationRunResponse.model_validate(run),
         id=run.id,
@@ -304,6 +320,12 @@ async def get_run(
         evidence=[EvidenceItemResponse.model_validate(item) for item in evidence],
         approval=ApprovalResponse.model_validate(approval) if approval else None,
         is_awaiting_approval=run.status == "awaiting_approval",
+        hypotheses=agent_state.get("hypotheses", []),
+        proposed_action=agent_state.get("proposed_action"),
+        agent_messages=agent_state.get("agent_messages", []),
+        agent_reports=agent_state.get("agent_reports", []),
+        memory_matches=agent_state.get("memory_matches", []),
+        tool_executions=agent_state.get("tool_executions", []),
     )
 
 

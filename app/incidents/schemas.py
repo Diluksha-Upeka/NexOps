@@ -157,6 +157,10 @@ class RunDetailResponse(BaseModel):
     proposed_action: dict[str, Any] | None = None
     approval: ApprovalResponse | None = None
     is_awaiting_approval: bool = False
+    agent_messages: list[dict[str, Any]] = Field(default_factory=list)
+    agent_reports: list[dict[str, Any]] = Field(default_factory=list)
+    memory_matches: list[dict[str, Any]] = Field(default_factory=list)
+    tool_executions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class RunEventResponse(BaseModel):
