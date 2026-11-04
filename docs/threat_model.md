@@ -1,6 +1,6 @@
 # Threat Model
 
-> **NexOps** is an AI-assisted operational incident response workbench. Because it processes external telemetry and suggests operational remediations, security, bounded agency, and isolation are primary architectural concerns.
+> **Ravel** is an AI-assisted operational incident intelligence system. Because it processes external telemetry and suggests operational remediations, security, bounded agency, and isolation are primary architectural concerns.
 
 ---
 
@@ -76,7 +76,7 @@
 
 ## 5. Production Hardening Roadmap
 
-Before deploying NexOps outside a local development sandbox:
+Before deploying Ravel outside a local development sandbox:
 - [ ] **Authentication & Authorization:** Integrate OIDC/OAuth2 with role-based permissions (Viewer, Operator, Admin).
 - [ ] **Disable Development Simulator Routes:** Ensure `SIMULATOR_ENABLED=false` in production settings to prevent external fault injection.
 - [ ] **Secret Management:** Move from `.env` files to a dedicated secret manager (e.g., HashiCorp Vault, AWS Secrets Manager).

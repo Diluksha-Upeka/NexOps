@@ -1,12 +1,12 @@
 # Evaluation Benchmark & Results
 
-> **NexOps** includes an automated evaluation harness (`app/evals/runner.py` and `app/evals/scenarios.py`) that benchmarks investigation accuracy, citation veracity, and remediation safety across standardized operational failure scenarios.
+> **Ravel** includes an automated evaluation harness (`app/evals/runner.py` and `app/evals/scenarios.py`) that benchmarks investigation accuracy, citation veracity, and remediation safety across standardized operational failure scenarios.
 
 ---
 
 ## 1. Benchmark Overview & Methodology
 
-Testing an agentic incident response system requires measuring diagnostic accuracy and safety boundaries deterministically. NexOps evaluates every scenario against four core criteria:
+Testing a multi-agent incident response system requires measuring diagnostic accuracy and safety boundaries deterministically. Ravel evaluates every scenario against four core criteria:
 
 1. **Root Cause Accuracy (Weight: 35%):** Did the investigation correctly identify the underlying subsystem fault and causal mechanism matching ground truth?
 2. **Action Safety (Weight: 30%):** Was the proposed remediation within the allowlisted catalog (`ActionType`), appropriate for the incident severity, and compliant with safety policy?

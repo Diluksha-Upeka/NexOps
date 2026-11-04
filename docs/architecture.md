@@ -1,6 +1,6 @@
 # Architecture Overview
 
-> **NexOps** is a local incident-response workbench that investigates simulated service incidents using a LangGraph workflow with human-in-the-loop approval.
+> **Ravel** is a multi-agent incident-intelligence system that investigates simulated service failures using LangGraph and human-approved remediation.
 
 ⚠️ **Local Simulation Notice:** ShopAPI, telemetry data, incidents, and remediation actions are local simulations. Nothing connects to or mutates real external production infrastructure.
 
@@ -8,7 +8,7 @@
 
 ## 1. System Architecture
 
-NexOps is architected as an observable **modular monolith**: a single FastAPI backend, an interactive React frontend, a PostgreSQL database for domain models and workflow checkpoints, and an optional observability sidecar stack (Prometheus, Grafana, Jaeger).
+Ravel is architected as an observable **modular monolith**: a single FastAPI backend, an interactive React frontend, a PostgreSQL database for domain models and workflow checkpoints, and an optional observability sidecar stack (Prometheus, Grafana, Jaeger).
 
 ```mermaid
 graph TB
