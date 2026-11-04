@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for NexOps
+# Multi-stage Dockerfile for Ravel
 # Stage 1: Build the React frontend
 FROM node:20-alpine AS frontend-builder
 WORKDIR /build

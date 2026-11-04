@@ -1,7 +1,7 @@
 [project]
-name = "nexops"
+name = "ravel-incident-intelligence"
 version = "0.1.0"
-description = "Agentic incident response system — local simulation workbench"
+description = "LangGraph multi-agent incident intelligence with human-approved remediation"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -49,6 +49,7 @@ target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
+ignore = ["E501"] # Formatter owns wrapping; long agent prompts remain readable.
 select = [
     "E",    # pycodestyle errors
     "W",    # pycodestyle warnings
