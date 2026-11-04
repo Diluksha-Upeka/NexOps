@@ -54,7 +54,11 @@ class Settings(BaseSettings):
     # --- Frontend ---
     frontend_origin: str = Field(
         default="http://localhost:5173",
-        description="Allowed CORS origin for the frontend.",
+        description="Allowed CORS origin for the Ravel console.",
+    )
+    shop_frontend_origin: str = Field(
+        default="http://localhost:5174",
+        description="Allowed CORS origin for the standalone Shop app.",
     )
 
     # --- Observability ---
