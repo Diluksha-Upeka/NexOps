@@ -1,1 +1,1 @@
-"""NexOps — Agentic Incident Response System."""
+"""Ravel — multi-agent incident intelligence and safe recovery."""

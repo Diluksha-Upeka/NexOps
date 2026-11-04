@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Logging
     setup_logging(level=settings.log_level)
     logger.info(
-        "Starting NexOps API",
+        "Starting Ravel API",
         extra={
             "structured": {
                 "env": settings.app_env,
@@ -100,8 +100,8 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="NexOps",
-        summary="Agentic Incident Response System",
+        title="Ravel",
+        summary="Multi-agent incident intelligence and safe recovery",
         description=(
             "A local incident-response workbench that investigates simulated service "
             "incidents using a LangGraph workflow with human-in-the-loop approval."
@@ -115,7 +115,7 @@ def create_app() -> FastAPI:
     # CORS — allow the local frontend origin only
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.frontend_origin],
+        allow_origins=[settings.frontend_origin, settings.shop_frontend_origin],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
