@@ -1,5 +1,5 @@
 /**
- * NexOps Icon System
+ * Ravel Icon System
  * ------------------
  * Pure SVG icons — no emojis, no dependencies.
  * Every icon shares the same 24×24 viewBox and currentColor fill for easy theming.
@@ -23,10 +23,10 @@ const defaults = (p: IconProps, fallbackSize = 20) => ({
   style: p.style,
 });
 
-/* ── NexOps Brand Mark ──
-   A hexagon with a stylised "N" bolt — the single brand symbol.
+/* ── Ravel Brand Mark ──
+   Three signal paths converging into one resolved thread.
 */
-export function NexOpsLogo({ size = 32, className, style }: IconProps) {
+export function RavelLogo({ size = 32, className, style }: IconProps) {
   return (
     <svg
       width={size}
@@ -37,27 +37,24 @@ export function NexOpsLogo({ size = 32, className, style }: IconProps) {
       className={className}
       style={style}
     >
-      {/* Hexagon shell */}
+      {/* Soft-square command surface */}
       <path
-        d="M20 2L36.66 11.5V30.5L20 40L3.34 30.5V11.5L20 2Z"
-        fill="url(#nexops-grad)"
-        stroke="url(#nexops-grad)"
-        strokeWidth="1"
+        d="M10 2h20a8 8 0 0 1 8 8v20a8 8 0 0 1-8 8H10a8 8 0 0 1-8-8V10a8 8 0 0 1 8-8Z"
+        fill="url(#ravel-grad)"
       />
-      {/* N letterform */}
+      {/* Converging evidence threads */}
       <path
-        d="M13 28V12L27 28V12"
-        stroke="#fff"
-        strokeWidth="2.8"
+        d="M11 11h6.5a6.5 6.5 0 0 1 0 13H11m7-6.5L29 29M11 29V11"
+        stroke="#07110f"
+        strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
       />
       <defs>
-        <linearGradient id="nexops-grad" x1="4" y1="4" x2="38" y2="38" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#6366f1" />
-          <stop offset="0.5" stopColor="#8b5cf6" />
-          <stop offset="1" stopColor="#a855f7" />
+        <linearGradient id="ravel-grad" x1="3" y1="3" x2="38" y2="38" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#b9ff66" />
+          <stop offset="1" stopColor="#55e6c1" />
         </linearGradient>
       </defs>
     </svg>
