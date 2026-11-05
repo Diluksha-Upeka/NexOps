@@ -1,4 +1,4 @@
-"""Multi-Agent Orchestration Architecture for NexOps Incident Response.
+"""Multi-Agent Orchestration Architecture for Ravel Incident Intelligence.
 
 Implements:
 1. Supervisor-Worker Pattern:
@@ -26,12 +26,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 import uuid
-from dataclasses import dataclass, field
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
-from typing import Any, Callable, Coroutine
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # ── 1. Specialized Agent Roles & Definitions ──────────────────────────
 
 
-class AgentRole(str, Enum):
+class AgentRole(StrEnum):
     SUPERVISOR = "supervisor"
     LOG_FORENSICS = "log_forensics"
     TELEMETRY_METRICS = "telemetry_metrics"
@@ -50,7 +50,7 @@ class AgentRole(str, Enum):
     SAFETY_OFFICER = "safety_officer"
 
 
-class AgentCapability(str, Enum):
+class AgentCapability(StrEnum):
     LOG_PARSING = "log_parsing"
     METRIC_ANOMALY = "metric_anomaly"
     TRACE_ANALYSIS = "trace_analysis"
@@ -82,7 +82,7 @@ AGENT_REGISTRY: dict[AgentRole, AgentProfile] = {
         description="Coordinates multi-agent investigation, assigns tasks, synthesizes evidence, and manages refinement loops.",
         capabilities=[AgentCapability.SYNTHESIS],
         system_prompt=(
-            "You are the NexOps Incident Commander. You oversee specialized agents, formulate high-level "
+            "You are the Ravel Incident Commander. You oversee specialized agents, formulate high-level "
             "investigation plans, query Long-Term Memory for known incident patterns, evaluate worker findings, "
             "and decide whether to loop for more evidence or escalate to remediation."
         ),
@@ -160,7 +160,7 @@ AGENT_REGISTRY: dict[AgentRole, AgentProfile] = {
 # ── 2. Inter-Agent Communication & Structured Messaging ──────────────
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     TASK_DELEGATION = "task_delegation"
     EVIDENCE_REPORT = "evidence_report"
     QUERY_REFINEMENT = "query_refinement"
@@ -203,7 +203,12 @@ HISTORICAL_INCIDENT_MEMORY: list[LongTermMemoryPattern] = [
         incident_pattern_id="LTM-001",
         pattern_key="db_conn_exhaustion",
         title="Post-Mortem: ShopAPI Connection Pool Exhaustion under Peak Traffic",
-        symptoms=["connection pool exhausted", "503 Service Unavailable", "timeout acquiring connection", "pool saturation"],
+        symptoms=[
+            "connection pool exhausted",
+            "503 Service Unavailable",
+            "timeout acquiring connection",
+            "pool saturation",
+        ],
         root_cause_summary="Connection leaks or insufficient pool size caused checkout transactions to hang waiting for connections.",
         effective_remediation="Reset pool or scale max connections and recycle idle connections.",
         historical_resolution_time_min=8,
@@ -213,7 +218,11 @@ HISTORICAL_INCIDENT_MEMORY: list[LongTermMemoryPattern] = [
         incident_pattern_id="LTM-002",
         pattern_key="db_latency",
         title="Post-Mortem: Unindexed Catalog Query Degradation",
-        symptoms=["p95 latency > 1200ms", "slow database spans", "sequential scan on products table"],
+        symptoms=[
+            "p95 latency > 1200ms",
+            "slow database spans",
+            "sequential scan on products table",
+        ],
         root_cause_summary="Missing index on category_id led to full table scans during product listings.",
         effective_remediation="Disable simulated latency fault or trigger cache warming.",
         historical_resolution_time_min=12,
@@ -264,7 +273,9 @@ class IncidentMemoryStore:
 
         for pattern in HISTORICAL_INCIDENT_MEMORY:
             matched_symptoms = sum(
-                1 for s in pattern.symptoms if any(token in query_text for token in s.lower().split())
+                1
+                for s in pattern.symptoms
+                if any(token in query_text for token in s.lower().split())
             )
             similarity = min(1.0, 0.4 + (matched_symptoms * 0.2)) if matched_symptoms > 0 else 0.1
             matches.append((pattern, round(similarity, 2)))
@@ -326,8 +337,10 @@ async def execute_agent_with_resilience[T](
         try:
             result = await asyncio.wait_for(action(), timeout=timeout)
             return result, attempt, None
-        except asyncio.TimeoutError:
-            last_error = f"{agent_role.value} timed out after {timeout}s (attempt {attempt}/{retries})"
+        except TimeoutError:
+            last_error = (
+                f"{agent_role.value} timed out after {timeout}s (attempt {attempt}/{retries})"
+            )
             logger.warning(last_error)
         except Exception as exc:
             last_error = f"{agent_role.value} failed: {exc} (attempt {attempt}/{retries})"
@@ -376,4 +389,3 @@ class MultiAgentEventBus:
 
     def get_events(self) -> list[AgentLifecycleEvent]:
         return list(self._events)
-
