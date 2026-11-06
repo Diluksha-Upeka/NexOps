@@ -88,10 +88,7 @@ def _check_execution_success(execution_result: ExecutionResult) -> dict[str, Any
     return {
         "check": "execution_success",
         "passed": execution_result.success and execution_result.status == "success",
-        "detail": (
-            f"Execution status: {execution_result.status}. "
-            f"{mutation_message}."
-        ),
+        "detail": (f"Execution status: {execution_result.status}. {mutation_message}."),
     }
 
 
