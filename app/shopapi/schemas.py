@@ -36,6 +36,26 @@ class ProductListResponse(BaseModel):
     total: int
 
 
+class ProductCreateRequest(BaseModel):
+    """Create a catalog product from the standalone Shop app."""
+
+    name: str = Field(min_length=2, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    price: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
+    stock: int = Field(ge=0, le=100000)
+    category: str = Field(default="general", min_length=2, max_length=100)
+
+
+class ProductUpdateRequest(BaseModel):
+    """Partial catalog product update."""
+
+    name: str | None = Field(default=None, min_length=2, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    price: Decimal | None = Field(default=None, gt=0, max_digits=10, decimal_places=2)
+    stock: int | None = Field(default=None, ge=0, le=100000)
+    category: str | None = Field(default=None, min_length=2, max_length=100)
+
+
 # ── Orders ────────────────────────────────────────────────────────────
 
 
@@ -78,3 +98,12 @@ class OrderResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class OrderListResponse(BaseModel):
+    items: list[OrderResponse]
+    total: int
+
+
+class OrderUpdateRequest(BaseModel):
+    status: str = Field(pattern="^(pending|confirmed|shipped|cancelled)$")
