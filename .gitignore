@@ -40,6 +40,9 @@ docker-compose.override.yml
 frontend/node_modules/
 frontend/dist/
 frontend/.cache/
+frontend/shop-app/node_modules/
+frontend/shop-app/dist/
+frontend/shop-app/tsconfig.tsbuildinfo
 
 # Testing
 .coverage
