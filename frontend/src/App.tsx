@@ -15,7 +15,7 @@ import {
   type RunDetail,
 } from './api';
 import {
-  NexOpsLogo,
+  RavelLogo,
   DashboardIcon,
   SignalIcon,
   BookIcon,
@@ -30,8 +30,6 @@ import {
   XCircleIcon,
   AlertTriangleIcon,
   ClipboardListIcon,
-  FlameIcon,
-  HeartPulseIcon,
   FileTextIcon,
   LinkIcon,
   RocketIcon,
@@ -42,7 +40,6 @@ import {
   BrainIcon,
   TerminalIcon,
   NetworkIcon,
-  DatabaseIcon,
   CpuIcon,
 } from './Icons';
 import { MultiAgentView, OrchestrationPage } from './MultiAgentView';
@@ -104,11 +101,31 @@ function App() {
       .catch(() => undefined);
   }, []);
 
+  // The standalone Shop app reports customer-impacting failures here.
+  // Keep the command center live without requiring a manual refresh.
+  useEffect(() => {
+    const refresh = () => {
+      fetchIncidents().then((result) => {
+        setIncidents(result.items);
+        setSelectedIncident((current) => current ?? result.items.find((item) => item.status !== 'resolved') ?? null);
+      }).catch(() => undefined);
+    };
+    const timer = setInterval(refresh, 2500);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedIncident || currentRun) return;
+    fetchRunsForIncident(selectedIncident.id).then(async (runs) => {
+      if (!runs.length) return;
+      const latest = runs.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0];
+      setCurrentRun(await fetchRun(latest.id));
+    }).catch(() => undefined);
+  }, [selectedIncident, currentRun]);
+
   /* ── Derived stats ── */
-  const totalIncidents = incidents.length;
   const openCount = incidents.filter((i) => i.status === 'open').length;
   const investigatingCount = incidents.filter((i) => i.status === 'investigating').length;
-  const resolvedCount = incidents.filter((i) => i.status === 'resolved').length;
 
   /* ── Poll for run updates ── */
   const startPolling = useCallback(
@@ -267,21 +284,26 @@ function App() {
       {/* ── Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <NexOpsLogo size={34} className="brand-logo" />
+          <RavelLogo size={34} className="brand-logo" />
           <div className="brand-text">
-            <h1>NexOps</h1>
-            <span>Incident Response</span>
+            <h1>Ravel</h1>
+            <span>Incident intelligence</span>
           </div>
         </div>
 
         <nav className="sidebar-nav">
           <div className="sidebar-section-label">Navigation</div>
+          <a className="nav-item" href="http://127.0.0.1:5174" target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+            <span className="nav-icon"><CpuIcon size={18} /></span>
+            Open Shop app
+            <span className="shop-nav-live">LIVE</span>
+          </a>
           <div
             className={`nav-item ${page === 'dashboard' ? 'active' : ''}`}
             onClick={() => setPage('dashboard')}
           >
             <span className="nav-icon"><DashboardIcon size={18} /></span>
-            Dashboard
+            Command center
             {openCount + investigatingCount > 0 && (
               <span className="nav-badge">{openCount + investigatingCount}</span>
             )}
@@ -291,7 +313,7 @@ function App() {
             onClick={() => setPage('orchestration')}
           >
             <span className="nav-icon"><NetworkIcon size={18} /></span>
-            Multi-Agent Orchestrator
+            Agent graph
           </div>
           <div
             className={`nav-item ${page === 'observability' ? 'active' : ''}`}
@@ -344,10 +366,8 @@ function App() {
           {page === 'dashboard' && (
             <DashboardPage
               incidents={incidents}
-              totalIncidents={totalIncidents}
               openCount={openCount}
               investigatingCount={investigatingCount}
-              resolvedCount={resolvedCount}
               health={health}
               healthError={healthError}
               selectedIncident={selectedIncident}
@@ -382,10 +402,8 @@ function App() {
 
 interface DashboardProps {
   incidents: Incident[];
-  totalIncidents: number;
   openCount: number;
   investigatingCount: number;
-  resolvedCount: number;
   health: HealthResponse | null;
   healthError: boolean;
   selectedIncident: Incident | null;
@@ -403,10 +421,8 @@ interface DashboardProps {
 
 function DashboardPage({
   incidents,
-  totalIncidents,
   openCount,
   investigatingCount,
-  resolvedCount,
   health,
   healthError,
   selectedIncident,
@@ -433,8 +449,9 @@ function DashboardPage({
       {/* Page Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Incident Dashboard</h1>
-          <p className="page-subtitle">Select an incident, then follow each step.</p>
+          <div className="eyebrow">LIVE OPERATIONS / LANGGRAPH</div>
+          <h1 className="page-title">Command center</h1>
+          <p className="page-subtitle">Turn noisy telemetry into an explainable, human-approved recovery.</p>
         </div>
         <div className="header-actions">
           <select
@@ -452,7 +469,7 @@ function DashboardPage({
             disabled={simulating}
           >
             <ZapIcon size={14} />
-            {simulating ? 'Preparing…' : 'New test'}
+            {simulating ? 'Preparing…' : 'Inject scenario'}
           </button>
         </div>
       </div>
@@ -466,42 +483,16 @@ function DashboardPage({
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div className="stats-grid">
-        <div className="stat-card blue" style={{ '--stagger': 0 } as React.CSSProperties}>
-          <div className="stat-label">Incidents</div>
-          <div className="stat-value">{totalIncidents}</div>
-          <div className="stat-detail">All incidents</div>
-          <span className="stat-icon"><ClipboardListIcon size={28} /></span>
-        </div>
-        <div className="stat-card amber" style={{ '--stagger': 1 } as React.CSSProperties}>
-          <div className="stat-label">Active</div>
-          <div className="stat-value">{openCount + investigatingCount}</div>
-          <div className="stat-detail">{openCount} open · {investigatingCount} running</div>
-          <span className="stat-icon"><FlameIcon size={28} /></span>
-        </div>
-        <div className="stat-card green" style={{ '--stagger': 2 } as React.CSSProperties}>
-          <div className="stat-label">Resolved</div>
-          <div className="stat-value">{resolvedCount}</div>
-          <div className="stat-detail">Finished</div>
-          <span className="stat-icon"><CheckCircleIcon size={28} /></span>
-        </div>
-        <div className="stat-card purple" style={{ '--stagger': 3 } as React.CSSProperties}>
-          <div className="stat-label">System Health</div>
-          <div className="stat-value">{health ? <HeartPulseIcon size={28} /> : healthError ? <XCircleIcon size={28} /> : <span className="loading-spinner" />}</div>
-          <div className="stat-detail">
-            {health
-              ? `API ${health.status} · DB ${health.checks.database}`
-              : healthError
-                ? 'Backend unreachable'
-                : 'Connecting…'}
-          </div>
-          <span className="stat-icon"><HeartPulseIcon size={28} /></span>
-        </div>
-      </div>
+      <LiveSystemStage
+        incidents={incidents}
+        selectedIncident={selectedIncident}
+        currentRun={currentRun}
+        investigating={investigating}
+        backendOnline={Boolean(health) && !healthError}
+      />
 
       {/* Two-column: Incident List + Detail Panel */}
-      <div style={{ display: 'grid', gridTemplateColumns: selectedIncident ? '380px 1fr' : '1fr', gap: '1.25rem', alignItems: 'start' }}>
+      <div className="incident-workspace" style={{ display: 'grid', gridTemplateColumns: selectedIncident ? '310px 1fr' : '1fr', gap: '1rem', alignItems: 'start' }}>
         {/* Incident List */}
         <div className="section-card">
           <div className="section-header">
@@ -509,7 +500,7 @@ function DashboardPage({
               <span className="icon"><AlertTriangleIcon size={16} /></span>
               Incidents
             </span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{totalIncidents} total</span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{openCount + investigatingCount} active</span>
           </div>
           {sorted.length === 0 ? (
             <div className="empty-state">
@@ -518,7 +509,7 @@ function DashboardPage({
             </div>
           ) : (
             <ul className="incident-list">
-              {sorted.map((incident) => (
+              {sorted.slice(0, 6).map((incident) => (
                 <li
                   key={incident.id}
                   className={`incident-row ${selectedIncident?.id === incident.id ? 'selected' : ''}`}
@@ -766,6 +757,93 @@ function DashboardPage({
   );
 }
 
+function LiveSystemStage({
+  incidents,
+  selectedIncident,
+  currentRun,
+  investigating,
+  backendOnline,
+}: {
+  incidents: Incident[];
+  selectedIncident: Incident | null;
+  currentRun: RunDetail | null;
+  investigating: boolean;
+  backendOnline: boolean;
+}) {
+  const activeIncident = selectedIncident ?? incidents.find((item) => item.status !== 'resolved') ?? null;
+  const active = Boolean(activeIncident && activeIncident.status !== 'resolved');
+  const evidenceSources = new Set(currentRun?.evidence.map((item) => item.source_type) ?? []);
+  const agentState = (source: string) =>
+    investigating ? 'working' : evidenceSources.has(source) ? 'done' : active ? 'ready' : 'idle';
+
+  return (
+    <section className="live-stage" aria-label="Live ShopAPI and multi-agent activity">
+      <div className="live-stage-head">
+        <div>
+          <span className="live-kicker"><span className="live-dot" /> LIVE SYSTEM</span>
+          <strong>See the incident happen</strong>
+        </div>
+        <span className={`service-pill ${backendOnline ? 'online' : 'offline'}`}>
+          {backendOnline ? 'Stack online' : 'Start backend to stream'}
+        </span>
+      </div>
+
+      <div className="system-flow">
+        <div className={`flow-panel shop-panel ${active ? 'degraded' : ''}`}>
+          <div className="flow-panel-label">01 / SERVICE</div>
+          <div className="service-title"><CpuIcon size={20} /> ShopAPI</div>
+          <div className="endpoint-row"><code>GET /products</code><span>{active ? '5xx / slow' : '200 OK'}</span></div>
+          <div className="request-stream" aria-hidden="true">
+            {[0, 1, 2, 3, 4].map((item) => <i key={item} style={{ '--pulse': item } as React.CSSProperties} />)}
+          </div>
+          <div className="service-metric">
+            <span>p95 latency</span>
+            <strong>{active ? '1,420 ms' : '84 ms'}</strong>
+          </div>
+        </div>
+
+        <div className={`flow-arrow ${active ? 'hot' : ''}`}>
+          <span>{active ? 'INCIDENT' : 'TELEMETRY'}</span><b>→</b>
+        </div>
+
+        <div className="flow-panel swarm-panel">
+          <div className="flow-panel-label">02 / LANGGRAPH TEAM</div>
+          <div className="swarm-head"><BrainIcon size={18} /> Commander <span>{investigating ? 'routing' : active ? 'ready' : 'watching'}</span></div>
+          <div className="agent-mini-grid">
+            {[
+              ['logs', 'Logs', FileTextIcon],
+              ['metrics', 'Metrics', ActivityIcon],
+              ['traces', 'Traces', LinkIcon],
+              ['changes', 'Changes', RocketIcon],
+            ].map(([source, label, Icon]) => {
+              const MiniIcon = Icon as typeof ActivityIcon;
+              const state = agentState(source as string);
+              return <div className={`agent-mini ${state}`} key={source as string}><MiniIcon size={13} /><span>{label as string}</span><i /></div>;
+            })}
+          </div>
+        </div>
+
+        <div className="flow-arrow"><span>DECISION</span><b>→</b></div>
+
+        <div className={`flow-panel outcome-panel ${currentRun?.is_awaiting_approval ? 'waiting' : ''}`}>
+          <div className="flow-panel-label">03 / SAFE RECOVERY</div>
+          <ShieldIcon size={22} />
+          <strong>{currentRun?.is_awaiting_approval ? 'Approval needed' : currentRun ? 'Evidence synthesized' : 'Human stays in control'}</strong>
+          <span>{currentRun?.evidence.length ?? 0} cited signals</span>
+        </div>
+      </div>
+
+      {activeIncident && (
+        <div className="live-incident-strip">
+          <span className={`incident-severity ${severityColor(activeIncident.severity)}`} />
+          <strong>{activeIncident.title}</strong>
+          <span>{activeIncident.status}</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /* ── Tiny inline icon helpers for buttons ── */
 function PlayIconSmall() {
   return (
@@ -992,7 +1070,8 @@ function ObservabilityPage() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Observability & Telemetry</h1>
+          <div className="eyebrow">SYSTEM PULSE / OPEN TELEMETRY</div>
+          <h1 className="page-title">Signals</h1>
           <p className="page-subtitle">
             Distributed tracing, metrics, and dashboards
           </p>
