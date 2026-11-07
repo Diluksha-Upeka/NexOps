@@ -15,7 +15,6 @@ import {
   RefreshIcon,
   AlertTriangleIcon,
   ZapIcon,
-  TargetIcon,
   TerminalIcon,
 } from './Icons';
 
@@ -53,7 +52,7 @@ export function MultiAgentView({
       role: 'Supervisor Agent',
       icon: BrainIcon,
       description: 'Orchestrates specialized worker agents, queries long-term pattern memory, synthesizes findings, and controls reflection loops.',
-      prompt: 'You are the NexOps Incident Commander. Decompose incidents into domain investigation tasks, dispatch to specialized workers, evaluate evidence sufficiency, and initiate reflection loops if confidence < 70%.',
+      prompt: 'You are the Ravel Incident Commander. Decompose incidents into domain investigation tasks, dispatch to specialized workers, evaluate evidence sufficiency, and initiate reflection loops if confidence < 70%.',
       tools: ['plan_investigation', 'query_long_term_memory', 'synthesize_evidence', 'route_sufficiency'],
       retries: 2,
       timeout: '30s',
@@ -265,25 +264,25 @@ export function MultiAgentView({
           className={`multiagent-tab-btn ${activeTab === 'topology' ? 'active' : ''}`}
           onClick={() => setActiveTab('topology')}
         >
-          <NetworkIcon size={14} /> Supervisor-Worker Topology
+          <NetworkIcon size={14} /> Agent map
         </button>
         <button
           className={`multiagent-tab-btn ${activeTab === 'messages' ? 'active' : ''}`}
           onClick={() => setActiveTab('messages')}
         >
-          <MessageSquareIcon size={14} /> Agent Message Bus ({messages.length})
+          <MessageSquareIcon size={14} /> Live messages ({messages.length})
         </button>
         <button
           className={`multiagent-tab-btn ${activeTab === 'memory' ? 'active' : ''}`}
           onClick={() => setActiveTab('memory')}
         >
-          <DatabaseIcon size={14} /> Short & Long-Term Memory
+          <DatabaseIcon size={14} /> Memory
         </button>
         <button
           className={`multiagent-tab-btn ${activeTab === 'tools' ? 'active' : ''}`}
           onClick={() => setActiveTab('tools')}
         >
-          <TerminalIcon size={14} /> Structured Tool Calling ({toolCalls.length})
+          <TerminalIcon size={14} /> Tool calls ({toolCalls.length})
         </button>
       </div>
 
@@ -589,9 +588,10 @@ export function OrchestrationPage({
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">LangGraph Multi-Agent Orchestrator</h1>
+          <div className="eyebrow">SUPERVISOR / WORKER RUNTIME</div>
+          <h1 className="page-title">Agent graph</h1>
           <p className="page-subtitle">
-            Autonomous Supervisor-Worker coordination, stateful checkpointing, memory layers, and human-in-the-loop gates.
+            Inspect how six specialists coordinate through shared state, durable checkpoints, and human gates.
           </p>
         </div>
         <div className="header-actions">
@@ -608,7 +608,7 @@ export function OrchestrationPage({
             className="simulate-btn"
             onClick={() => onTriggerSimulation(selectedScenario)}
           >
-            <ZapIcon size={14} /> Dispatch Multi-Agent Run
+            <ZapIcon size={14} /> Launch investigation
           </button>
         </div>
       </div>
