@@ -1,4 +1,4 @@
-# NexOps — Agentic Incident Response Workbench
+# Ravel — Multi-Agent Incident Intelligence
 
 [![Python 3.12](assets/badges/python.svg)](https://www.python.org/)
 [![FastAPI](assets/badges/fastapi.svg)](https://fastapi.tiangolo.com/)
@@ -10,7 +10,9 @@
 [![Ruff](assets/badges/ruff.svg)](https://github.com/astral-sh/ruff)
 [![Checked with mypy](assets/badges/mypy.svg)](https://mypy-lang.org/)
 
-> **NexOps** is a local incident-response workbench that investigates service incidents using a stateful **LangGraph** workflow with parallel evidence gathering, human-in-the-loop approval, and sandboxed remediation.
+> **Ravel** unravels production incidents with a stateful **LangGraph** team: a supervisor coordinates four parallel evidence specialists, a safety agent constrains remediation, and a human makes the final call.
+
+Ravel is a portfolio-grade reference implementation of a production-minded agent system—not a chat wrapper. It demonstrates typed shared state, parallel fan-out/fan-in, bounded reflection, durable checkpoints, structured tool calls, observable execution, and least-authority remediation.
 
 ---
 
@@ -47,7 +49,7 @@
 
 ## 🏗 System Architecture
 
-NexOps is built as an observable modular monolith with clear package boundaries:
+Ravel is built as an observable modular monolith with clear package boundaries:
 
 ```mermaid
 graph TB
@@ -159,8 +161,8 @@ flowchart TD
 
 ```bash
 # Clone the repository
-git clone https://github.com/Diluksha-Upeka/NexOps.git
-cd NexOps
+git clone https://github.com/Diluksha-Upeka/Ravel.git
+cd Ravel
 
 # Copy environment settings
 cp .env.example .env
@@ -212,14 +214,21 @@ In **Terminal 1 (Backend)**:
 uv run uvicorn app.main:app --reload
 ```
 
-In **Terminal 2 (Frontend)**:
+In **Terminal 2 (Ravel operations console)**:
 ```bash
 cd frontend
 npm ci
 npm run dev
 ```
 
-- **Interactive Dashboard:** [http://localhost:5173](http://localhost:5173)
+In **Terminal 3 (standalone North Market shop)**:
+```bash
+cd frontend/shop-app
+npm run dev
+```
+
+- **Ravel Operations Console:** [http://localhost:5173](http://localhost:5173)
+- **North Market Shop:** [http://localhost:5174](http://localhost:5174)
 - **API Swagger Documentation:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - **Prometheus Metrics:** [http://127.0.0.1:8000/metrics](http://127.0.0.1:8000/metrics)
 
@@ -227,8 +236,9 @@ npm run dev
 
 ### 6. Interactive Demo Walkthrough
 
-1. Open **[http://localhost:5173](http://localhost:5173)** in your browser.
-2. Select the seeded incident **"Checkout Latency Spike"**.
+1. Open North Market at **[http://localhost:5174](http://localhost:5174)** and use its product/order CRUD.
+2. Inject a ShopAPI fault from Ravel, then refresh the shop to experience the customer impact.
+3. Return to **[http://localhost:5173](http://localhost:5173)**. Ravel automatically discovers the incident and starts the multi-agent investigation.
 3. Click **"Run Investigation"**:
    - Watch the LangGraph state machine execute parallel queries for logs, metrics, traces, and deploy events.
    - Inspect the synthesized root cause hypothesis with verifiable evidence citations.
@@ -258,7 +268,7 @@ When running with `--profile observability`, full distributed telemetry is enabl
 
 ## 📈 Evaluation Benchmark (98.3% Score)
 
-NexOps features a built-in automated evaluation harness (`app/evals/runner.py`) that tests the system across 6 standardized production outage scenarios:
+Ravel features a built-in automated evaluation harness (`app/evals/runner.py`) that tests the system across 6 standardized production outage scenarios:
 
 ```bash
 uv run python -m app.evals.runner
@@ -294,7 +304,7 @@ Key architectural decisions are documented in detail:
 
 ## 🔒 Threat Model & Safety Boundaries
 
-NexOps is designed with defense-in-depth principles for AI agent systems:
+Ravel is designed with defense-in-depth principles for AI agent systems:
 
 - **Untrusted Telemetry Handling:** Telemetry logs and error traces are treated as passive data, never executable instructions, neutralizing indirect prompt injection attacks.
 - **Closed Action Catalog:** The model cannot generate free-form bash or shell strings. All mutations are restricted to an enum (`ActionType`).
