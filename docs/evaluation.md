@@ -42,7 +42,7 @@ uv run python -m app.evals.runner
 
 ```text
 ================================================================================
-                            NEXOPS EVALUATION BENCHMARK
+                            RAVEL EVALUATION BENCHMARK
 ================================================================================
 Model                     : fake-incident-reasoner-v1
 Prompt Version            : 1.0.0

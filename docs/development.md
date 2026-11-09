@@ -17,7 +17,7 @@ An LLM API key is **optional**. Without one, the system uses a deterministic fak
 
 ```powershell
 git clone <repo-url>
-cd NexOps
+cd Ravel
 cp .env.example .env   # edit .env if needed
 ```
 
@@ -54,7 +54,7 @@ uv run uvicorn app.main:app --reload
 API docs available at: http://127.0.0.1:8000/docs  
 Health check: http://127.0.0.1:8000/api/v1/health
 
-### 6. Start the frontend
+### 6. Start the Ravel operations console
 
 ```powershell
 cd frontend
@@ -62,7 +62,17 @@ npm ci
 npm run dev
 ```
 
-Frontend available at: http://localhost:5173
+Console available at: http://localhost:5173
+
+### 7. Start the Shop storefront (optional)
+
+```powershell
+cd frontend/shop-app
+npm ci
+npm run dev
+```
+
+Shop app available at: http://localhost:5174
 
 ## Investigation approval flow
 
@@ -89,7 +99,8 @@ sequence number; events are persisted rather than held only in browser memory.
 | Run tests | `uv run pytest` |
 | Lint/format | `uv run ruff check . && uv run ruff format .` |
 | Type check | `uv run mypy app/` |
-| Frontend dev | `cd frontend && npm run dev` |
+| Operations console | `cd frontend && npm run dev` |
+| Shop storefront | `cd frontend/shop-app && npm run dev` |
 | Frontend lint | `cd frontend && npm run lint` |
 
 ## Environment Variables
@@ -99,6 +110,7 @@ See [`.env.example`](../.env.example) for all available configuration. Key varia
 - `LLM_PROVIDER=fake` — runs without an API key (deterministic mode)
 - `DATABASE_URL` — PostgreSQL connection string
 - `SIMULATOR_ENABLED=true` — enables fault simulator routes
+- `SHOP_FRONTEND_ORIGIN` — CORS origin for the standalone Shop app
 
 ## Resource Usage
 
