@@ -72,7 +72,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (service, route) (rate(nexops_http_requests_total[1m]))",
+          "expr": "sum by (service, route) (rate(ravel_http_requests_total[1m]))",
           "legendFormat": "{{service}} - {{route}}",
           "range": true,
           "refId": "A"
@@ -131,7 +131,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(nexops_http_request_duration_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(ravel_http_request_duration_seconds_bucket[1m])))",
           "legendFormat": "p50 latency",
           "range": true,
           "refId": "p50"
@@ -142,7 +142,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(nexops_http_request_duration_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(ravel_http_request_duration_seconds_bucket[1m])))",
           "legendFormat": "p95 latency",
           "range": true,
           "refId": "p95"
@@ -153,7 +153,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(nexops_http_request_duration_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(ravel_http_request_duration_seconds_bucket[1m])))",
           "legendFormat": "p99 latency",
           "range": true,
           "refId": "p99"
@@ -213,7 +213,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum(rate(nexops_http_requests_total{status_class=\"5xx\"}[1m])) / sum(rate(nexops_http_requests_total[1m]))",
+          "expr": "sum(rate(ravel_http_requests_total{status_class=\"5xx\"}[1m])) / sum(rate(ravel_http_requests_total[1m]))",
           "legendFormat": "5xx error ratio",
           "refId": "A"
         }
@@ -273,7 +273,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "nexops_simulator_fault_active",
+          "expr": "ravel_simulator_fault_active",
           "legendFormat": "{{scenario_key}}",
           "refId": "A"
         }
@@ -327,7 +327,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum by (status) (nexops_investigation_runs_total)",
+          "expr": "sum by (status) (ravel_investigation_runs_total)",
           "legendFormat": "Status: {{status}}",
           "refId": "A"
         }
@@ -369,7 +369,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum by (source_type) (nexops_evidence_items_total)",
+          "expr": "sum by (source_type) (ravel_evidence_items_total)",
           "legendFormat": "Source: {{source_type}}",
           "refId": "A"
         }
@@ -411,7 +411,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum by (action_type, status) (nexops_remediation_actions_total)",
+          "expr": "sum by (action_type, status) (ravel_remediation_actions_total)",
           "legendFormat": "{{action_type}} - {{status}}",
           "refId": "A"
         }
@@ -422,7 +422,7 @@
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["nexops", "langgraph", "incident-response", "observability"],
+  "tags": ["ravel", "langgraph", "incident-response", "observability"],
   "time": {
     "from": "now-15m",
     "to": "now"
@@ -431,7 +431,7 @@
     "refresh_intervals": ["5s", "10s", "30s", "1m"]
   },
   "timezone": "browser",
-  "title": "NexOps — Incident Response & Telemetry Dashboard",
-  "uid": "nexops-main",
+  "title": "Ravel — Multi-Agent Incident Intelligence & Telemetry",
+  "uid": "ravel-main",
   "version": 1
 }
