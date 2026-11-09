@@ -1086,7 +1086,7 @@ function ObservabilityPage() {
           </span>
         </div>
         <div className="obs-links">
-          <a className="obs-link" href="http://localhost:3000/d/nexops-main" target="_blank" rel="noreferrer">
+          <a className="obs-link" href="http://localhost:3000/d/ravel-main" target="_blank" rel="noreferrer">
             <span className="link-dot grafana" />
             Grafana Dashboard
             <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>:3000</span>

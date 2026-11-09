@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: "NexOps Dashboards"
+  - name: "Ravel Dashboards"
     orgId: 1
-    folder: "NexOps"
+    folder: "Ravel"
     type: file
     disableDeletion: true
     updateIntervalSeconds: 10
