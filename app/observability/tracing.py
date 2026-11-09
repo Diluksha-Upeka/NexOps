@@ -39,7 +39,7 @@ _PROPAGATOR = TraceContextTextMapPropagator()
 
 def init_tracing(
     endpoint: str | None = None,
-    service_name: str = "nexops",
+    service_name: str = "ravel",
     debug_console: bool = False,
 ) -> TracerProvider:
     """Initialize OpenTelemetry TracerProvider with optional OTLP HTTP exporter."""
@@ -84,7 +84,7 @@ def shutdown_tracing() -> None:
         _TRACER_PROVIDER = None
 
 
-def get_tracer(name: str = "nexops") -> trace.Tracer:
+def get_tracer(name: str = "ravel") -> trace.Tracer:
     """Retrieve the configured tracer instance."""
     return trace.get_tracer(name)
 
@@ -181,7 +181,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
             span.set_attribute("http.method", request.method)
             span.set_attribute("http.url", str(request.url))
             span.set_attribute("http.route", route_label)
-            span.set_attribute("nexops.request_id", req_id)
+            span.set_attribute("ravel.request_id", req_id)
 
             try:
                 response: Response = await call_next(request)

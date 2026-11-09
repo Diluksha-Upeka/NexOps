@@ -34,7 +34,7 @@ async def health_check() -> dict[str, Any]:
     status = "healthy" if db_ok else "degraded"
     return {
         "status": status,
-        "service": "nexops",
+        "service": "ravel",
         "checks": {
             "database": "connected" if db_ok else "unavailable",
         },

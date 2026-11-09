@@ -30,57 +30,57 @@ from starlette.routing import Match
 # ── Metric Definitions ────────────────────────────────────────────────
 
 HTTP_REQUESTS_TOTAL = Counter(
-    "nexops_http_requests_total",
-    "Total HTTP requests processed by NexOps",
+    "ravel_http_requests_total",
+    "Total HTTP requests processed by Ravel",
     ["service", "route", "method", "status_class"],
 )
 
 HTTP_REQUEST_DURATION_SECONDS = Histogram(
-    "nexops_http_request_duration_seconds",
+    "ravel_http_request_duration_seconds",
     "HTTP request latency in seconds",
     ["service", "route", "method"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
 )
 
 ACTIVE_SIMULATOR_FAULTS = Gauge(
-    "nexops_simulator_fault_active",
+    "ravel_simulator_fault_active",
     "Currently active simulator fault scenarios (1 = active, 0 = inactive)",
     ["scenario_key"],
 )
 
 INVESTIGATION_RUNS_TOTAL = Counter(
-    "nexops_investigation_runs_total",
+    "ravel_investigation_runs_total",
     "LangGraph investigation runs",
     ["service", "status"],
 )
 
 INVESTIGATION_RUN_DURATION_SECONDS = Histogram(
-    "nexops_investigation_run_duration_seconds",
+    "ravel_investigation_run_duration_seconds",
     "LangGraph investigation duration in seconds",
     ["service", "status"],
     buckets=(0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 45.0, 90.0, 180.0),
 )
 
 EVIDENCE_ITEMS_TOTAL = Counter(
-    "nexops_evidence_items_total",
+    "ravel_evidence_items_total",
     "Total evidence items collected during investigations",
     ["source_type"],
 )
 
 REMEDIATION_ACTIONS_TOTAL = Counter(
-    "nexops_remediation_actions_total",
+    "ravel_remediation_actions_total",
     "Sandbox remediation actions executed",
     ["action_type", "status"],
 )
 
 LLM_REQUESTS_TOTAL = Counter(
-    "nexops_llm_requests_total",
+    "ravel_llm_requests_total",
     "LLM adapter requests",
     ["provider", "model", "status"],
 )
 
 LLM_REQUEST_DURATION_SECONDS = Histogram(
-    "nexops_llm_request_duration_seconds",
+    "ravel_llm_request_duration_seconds",
     "LLM adapter call duration in seconds",
     ["provider", "model"],
     buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0),
@@ -128,7 +128,7 @@ class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
 
         method = request.method
         route = normalize_route_template(request)
-        service = "shopapi" if route.startswith("/shopapi") else "nexops-api"
+        service = "shopapi" if route.startswith("/shopapi") else "ravel-api"
 
         start_time = time.perf_counter()
         status_code = 500

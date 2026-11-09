@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         endpoint=settings.otel_exporter_otlp_endpoint
         if settings.otel_exporter_otlp_endpoint
         else None,
-        service_name="nexops",
+        service_name="ravel",
     )
     logger.info("OpenTelemetry tracing initialized")
 

@@ -17,7 +17,7 @@ async def test_health_returns_200() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["service"] == "nexops"
+    assert body["service"] == "ravel"
     assert "status" in body
     assert "checks" in body
     assert "database" in body["checks"]
