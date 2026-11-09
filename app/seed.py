@@ -255,13 +255,13 @@ async def reset_demo_data(session: AsyncSession) -> None:
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Seed NexOps local development data")
+    parser = argparse.ArgumentParser(description="Seed Ravel local development data")
     parser.add_argument("--reset", action="store_true", help="Clear and reseed local demo data")
     parser.add_argument("--demo", action="store_true", help="Ensure an active demo incident exists")
     args = parser.parse_args()
 
     settings = get_settings()
-    print(f"[SEED] NexOps Seeder: connecting to {settings.database_url.split('@')[-1]}")
+    print(f"[SEED] Ravel Seeder: connecting to {settings.database_url.split('@')[-1]}")
 
     engine = create_async_engine(settings.database_url, echo=False)
     session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)

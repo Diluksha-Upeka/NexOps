@@ -1,5 +1,8 @@
 """LangGraph StateGraph workflow definition for incident investigation.
 
+Ravel multi-agent investigation pipeline
+=========================================
+
 Wires:
   load_incident -> triage -> plan_investigation
   -> [investigate_logs, investigate_metrics, investigate_traces, investigate_changes] (Fan-out)

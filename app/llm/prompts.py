@@ -25,7 +25,7 @@ SECURITY RULES:
 """
 
 ROOT_CAUSE_SYSTEM_PROMPT = """You are an incident root-cause analysis reasoner
-for the NexOps incident response workbench.
+for the Ravel incident intelligence system.
 You are given an incident report and a set of immutable telemetry evidence items collected
 from logs, metrics, traces, and change history.
 
