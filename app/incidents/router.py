@@ -35,6 +35,7 @@ from app.incidents.schemas import (
     InvestigationRunResponse,
     ResolveIncidentRequest,
     RunDetailResponse,
+    RunEventResponse,
     SubmitApprovalRequest,
 )
 from app.incidents.service import (
@@ -213,6 +214,12 @@ async def _execute_run(
             for msg in result.get("agent_messages", []):
                 await svc.append_run_event(run_id, "agent_message", msg)
 
+            for report in result.get("agent_reports", []):
+                await svc.append_run_event(run_id, "agent_report", report)
+
+            for tool in result.get("tool_executions", []):
+                await svc.append_run_event(run_id, "tool_execution", tool)
+
             for item in result.get("evidence", []):
                 await svc.add_evidence(
                     run_id=run_id,
@@ -363,6 +370,20 @@ async def stream_run_events(
             await asyncio.sleep(0.25)
 
     return StreamingResponse(events(), media_type="text/event-stream")
+
+
+@router.get("/runs/{run_id}/events/history", response_model=list[RunEventResponse])
+async def get_run_event_history(
+    run_id: uuid.UUID,
+    after_sequence: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> list[RunEventResponse]:
+    """Fetch persisted investigation run progress events for replay and inspection."""
+    svc = IncidentService(session)
+    if await svc.get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="Investigation run not found")
+    events = await svc.list_run_events(run_id, after_sequence=after_sequence)
+    return [RunEventResponse.model_validate(event) for event in events]
 
 
 @router.post("/runs/{run_id}/approval", response_model=ApprovalResponse)
