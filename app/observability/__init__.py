@@ -18,6 +18,8 @@ from app.observability.context import (
 )
 from app.observability.metrics import (
     ACTIVE_SIMULATOR_FAULTS,
+    AGENT_EXECUTION_DURATION_SECONDS,
+    AGENT_EXECUTIONS_TOTAL,
     EVIDENCE_ITEMS_TOTAL,
     HTTP_REQUEST_DURATION_SECONDS,
     HTTP_REQUESTS_TOTAL,
@@ -29,6 +31,7 @@ from app.observability.metrics import (
     PrometheusMetricsMiddleware,
     get_metrics_response,
     normalize_route_template,
+    record_agent_execution,
     record_evidence_collected,
     record_investigation_run,
     record_llm_invocation,
@@ -54,6 +57,8 @@ from app.observability.tracing import (
 
 __all__ = [
     "ACTIVE_SIMULATOR_FAULTS",
+    "AGENT_EXECUTIONS_TOTAL",
+    "AGENT_EXECUTION_DURATION_SECONDS",
     "EVIDENCE_ITEMS_TOTAL",
     "HTTP_REQUESTS_TOTAL",
     "HTTP_REQUEST_DURATION_SECONDS",
@@ -73,6 +78,7 @@ __all__ = [
     "get_tracer",
     "init_tracing",
     "normalize_route_template",
+    "record_agent_execution",
     "record_evidence_collected",
     "record_investigation_run",
     "record_llm_invocation",

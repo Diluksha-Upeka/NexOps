@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import uuid
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
@@ -34,6 +35,8 @@ from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+from app.observability.metrics import record_agent_execution
 
 logger = logging.getLogger(__name__)
 
@@ -332,10 +335,13 @@ async def execute_agent_with_resilience[T](
     timeout = timeout_seconds or (profile.timeout_seconds if profile else 15.0)
     retries = max_retries if max_retries is not None else (profile.max_retries if profile else 2)
 
+    started = time.perf_counter()
     last_error: str | None = None
     for attempt in range(1, retries + 1):
         try:
             result = await asyncio.wait_for(action(), timeout=timeout)
+            status = "retried" if attempt > 1 else "completed"
+            record_agent_execution(agent_role.value, status, time.perf_counter() - started)
             return result, attempt, None
         except TimeoutError:
             last_error = (
@@ -350,6 +356,7 @@ async def execute_agent_with_resilience[T](
             delay = backoff_factor ** (attempt - 1)
             await asyncio.sleep(delay)
 
+    record_agent_execution(agent_role.value, "failed", time.perf_counter() - started)
     return None, retries, last_error
 
 

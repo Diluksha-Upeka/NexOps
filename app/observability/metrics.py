@@ -86,6 +86,19 @@ LLM_REQUEST_DURATION_SECONDS = Histogram(
     buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0),
 )
 
+AGENT_EXECUTIONS_TOTAL = Counter(
+    "ravel_agent_executions_total",
+    "Total specialized agent task executions",
+    ["agent_role", "status"],
+)
+
+AGENT_EXECUTION_DURATION_SECONDS = Histogram(
+    "ravel_agent_execution_duration_seconds",
+    "Specialized agent task execution duration in seconds",
+    ["agent_role", "status"],
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
+)
+
 # ── Cardinality Protection ───────────────────────────────────────────
 
 UUID_PATTERN = re.compile(
@@ -209,6 +222,16 @@ def record_llm_invocation(
         provider=safe_provider,
         model=safe_model,
     ).observe(max(duration_seconds, 0.0))
+
+
+def record_agent_execution(agent_role: str, status: str, duration_seconds: float) -> None:
+    """Record execution count and duration for a specialized multi-agent role."""
+    safe_role = agent_role or "unknown"
+    safe_status = status or "completed"
+    AGENT_EXECUTIONS_TOTAL.labels(agent_role=safe_role, status=safe_status).inc()
+    AGENT_EXECUTION_DURATION_SECONDS.labels(agent_role=safe_role, status=safe_status).observe(
+        max(duration_seconds, 0.0)
+    )
 
 
 def get_metrics_response() -> Response:

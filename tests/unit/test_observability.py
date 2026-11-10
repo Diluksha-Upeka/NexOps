@@ -27,6 +27,7 @@ from app.incidents.evidence_tools import ToolResult, query_logs
 from app.main import create_app
 from app.observability import (
     ACTIVE_SIMULATOR_FAULTS,
+    AGENT_EXECUTIONS_TOTAL,
     EVIDENCE_ITEMS_TOTAL,
     INVESTIGATION_RUNS_TOTAL,
     LLM_REQUESTS_TOTAL,
@@ -36,6 +37,7 @@ from app.observability import (
     get_current_span_id,
     get_current_trace_id,
     normalize_route_template,
+    record_agent_execution,
     record_evidence_collected,
     record_investigation_run,
     record_remediation_action,
@@ -113,6 +115,14 @@ def test_set_simulator_fault_state_gauge() -> None:
 
     set_simulator_fault_state(scenario, False)
     assert ACTIVE_SIMULATOR_FAULTS.labels(scenario_key=scenario)._value.get() == 0.0
+
+
+def test_record_agent_execution_metric() -> None:
+    """Verify multi-agent execution metric tracks role and status."""
+    role = f"agent-{uuid.uuid4().hex[:4]}"
+    record_agent_execution(agent_role=role, status="completed", duration_seconds=0.18)
+    val = AGENT_EXECUTIONS_TOTAL.labels(agent_role=role, status="completed")._value.get()
+    assert val >= 1.0
 
 
 # ── Distributed Tracing Tests ─────────────────────────────────────────
