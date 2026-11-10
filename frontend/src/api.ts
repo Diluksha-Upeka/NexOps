@@ -126,6 +126,31 @@ export interface InvestigationRun {
   model_name: string | null;
 }
 
+export interface AuditEvent {
+  id: string;
+  actor: string;
+  event_type: string;
+  resource_type: string;
+  resource_id: string;
+  details_json: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface RunEvent {
+  id: string;
+  run_id: string;
+  sequence: number;
+  event_type: string;
+  payload_json: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface StreamedRunEvent {
+  sequence: number;
+  type: string;
+  payload: Record<string, unknown>;
+}
+
 async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -170,6 +195,59 @@ export async function fetchRunsForIncident(incidentId: string): Promise<Investig
 
 export async function fetchEvidence(runId: string): Promise<EvidenceItem[]> {
   return apiRequest(`/runs/${runId}/evidence`);
+}
+
+export async function fetchRunEvents(runId: string, afterSequence = 0): Promise<RunEvent[]> {
+  return apiRequest(`/runs/${runId}/events/history?after_sequence=${afterSequence}`);
+}
+
+export async function fetchIncidentAudit(incidentId: string): Promise<AuditEvent[]> {
+  return apiRequest(`/incidents/${incidentId}/audit`);
+}
+
+export function subscribeRunEvents(
+  runId: string,
+  onEvent: (event: StreamedRunEvent) => void,
+  onError?: () => void,
+): () => void {
+  const source = new EventSource(`${API_BASE}/runs/${runId}/events`);
+  const eventTypes = [
+    'run_started',
+    'agent_message',
+    'agent_report',
+    'tool_execution',
+    'approval_required',
+    'approval_decided',
+    'run_finished',
+  ];
+
+  const handleNamed = (event: MessageEvent<string>) => {
+    try {
+      const parsed = JSON.parse(event.data) as Record<string, unknown>;
+      const sequence = event.lastEventId ? Number(event.lastEventId) : 0;
+      onEvent({
+        sequence: Number.isFinite(sequence) ? sequence : 0,
+        type: event.type,
+        payload: parsed,
+      });
+    } catch {
+      /* ignore malformed SSE frames */
+    }
+  };
+
+  for (const name of eventTypes) {
+    source.addEventListener(name, handleNamed as EventListener);
+  }
+  source.onerror = () => {
+    onError?.();
+  };
+
+  return () => {
+    for (const name of eventTypes) {
+      source.removeEventListener(name, handleNamed as EventListener);
+    }
+    source.close();
+  };
 }
 
 export async function submitApproval(
