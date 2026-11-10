@@ -105,3 +105,52 @@ async def test_evidence_tool_invalid_service() -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/v1/tools/logs?service=unknown")
         assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_run_event_history_not_found() -> None:
+    """GET /api/v1/runs/{id}/events/history with unknown run returns 404."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(
+            "/api/v1/runs/00000000-0000-0000-0000-000000000000/events/history"
+        )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_run_event_history_sequence_order() -> None:
+    """Run events created during investigation should be queryable in ascending sequence order."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        inc_res = await client.post(
+            "/api/v1/incidents",
+            json={
+                "title": "ShopAPI elevated latency spike",
+                "description": "P95 latency elevated during peak requests",
+                "service": "shopapi",
+                "severity": "high",
+                "scenario_key": "db_latency",
+            },
+        )
+        assert inc_res.status_code == 201
+        incident_id = inc_res.json()["id"]
+
+        run_res = await client.post(f"/api/v1/incidents/{incident_id}/investigations")
+        assert run_res.status_code == 202
+        run_id = run_res.json()["id"]
+
+        history_res = await client.get(f"/api/v1/runs/{run_id}/events/history")
+        assert history_res.status_code == 200
+        events = history_res.json()
+        assert len(events) >= 1
+        assert events[0]["event_type"] == "run_started"
+        sequences = [e["sequence"] for e in events]
+        assert sequences == sorted(sequences)
+
+        # Replay cursor should filter out earlier events
+        tail_res = await client.get(
+            f"/api/v1/runs/{run_id}/events/history?after_sequence={sequences[-1]}"
+        )
+        assert tail_res.status_code == 200
+        assert tail_res.json() == []
