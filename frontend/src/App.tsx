@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   createIncident,
   fetchHealth,
@@ -10,6 +10,7 @@ import {
   startInvestigation,
   startScenario,
   submitApproval,
+  subscribeRunEvents,
   type HealthResponse,
   type Incident,
   type RunDetail,
@@ -90,6 +91,7 @@ function App() {
   const [investigating, setInvestigating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pollTimer, setPollTimer] = useState<ReturnType<typeof setInterval> | null>(null);
+  const sseUnsubRef = useRef<(() => void) | null>(null);
 
   /* ── Load on mount ── */
   useEffect(() => {
@@ -127,11 +129,16 @@ function App() {
   const openCount = incidents.filter((i) => i.status === 'open').length;
   const investigatingCount = incidents.filter((i) => i.status === 'investigating').length;
 
-  /* ── Poll for run updates ── */
+  /* ── Stream & Poll for run updates ── */
   const startPolling = useCallback(
     (runId: string) => {
       if (pollTimer) clearInterval(pollTimer);
-      const timer = setInterval(async () => {
+      if (sseUnsubRef.current) {
+        sseUnsubRef.current();
+        sseUnsubRef.current = null;
+      }
+
+      const syncRunState = async () => {
         try {
           const run = await fetchRun(runId);
           setCurrentRun(run);
@@ -139,13 +146,26 @@ function App() {
             clearInterval(timer);
             setPollTimer(null);
             setInvestigating(false);
-            // Refresh incidents list
+            if (sseUnsubRef.current) {
+              sseUnsubRef.current();
+              sseUnsubRef.current = null;
+            }
             fetchIncidents().then((r) => setIncidents(r.items)).catch(() => undefined);
           }
         } catch {
           /* ignore transient errors */
         }
-      }, 1500);
+      };
+
+      sseUnsubRef.current = subscribeRunEvents(runId, (ev) => {
+        if (['agent_message', 'agent_report', 'approval_required', 'run_finished'].includes(ev.type)) {
+          void syncRunState();
+        }
+      });
+
+      const timer = setInterval(() => {
+        void syncRunState();
+      }, 2000);
       setPollTimer(timer);
     },
     [pollTimer],
@@ -154,6 +174,7 @@ function App() {
   useEffect(() => {
     return () => {
       if (pollTimer) clearInterval(pollTimer);
+      if (sseUnsubRef.current) sseUnsubRef.current();
     };
   }, [pollTimer]);
 
