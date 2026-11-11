@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   createIncident,
   fetchHealth,
+  fetchIncidentAudit,
   fetchIncidents,
   fetchRun,
+  fetchRunEvents,
   fetchRunsForIncident,
   generateScenarioTraffic,
   resolveIncident,
@@ -11,9 +13,11 @@ import {
   startScenario,
   submitApproval,
   subscribeRunEvents,
+  type AuditEvent,
   type HealthResponse,
   type Incident,
   type RunDetail,
+  type RunEvent,
 } from './api';
 import {
   RavelLogo,
@@ -459,9 +463,31 @@ function DashboardPage({
   onDismissError,
 }: DashboardProps) {
   const [simScenario, setSimScenario] = useState('db_conn_exhaustion');
-  const [viewMode, setViewMode] = useState<'multiagent' | 'timeline'>('multiagent');
+  const [viewMode, setViewMode] = useState<'multiagent' | 'timeline' | 'audit'>('multiagent');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'investigating' | 'resolved'>('all');
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [runEvents, setRunEvents] = useState<RunEvent[]>([]);
+
+  useEffect(() => {
+    if (!selectedIncident) {
+      setAuditEvents([]);
+      return;
+    }
+    fetchIncidentAudit(selectedIncident.id)
+      .then(setAuditEvents)
+      .catch(() => setAuditEvents([]));
+  }, [selectedIncident, currentRun?.status]);
+
+  useEffect(() => {
+    if (!currentRun) {
+      setRunEvents([]);
+      return;
+    }
+    fetchRunEvents(currentRun.id)
+      .then(setRunEvents)
+      .catch(() => setRunEvents([]));
+  }, [currentRun]);
 
   const query = searchQuery.trim().toLowerCase();
   const filtered = incidents.filter((incident) => {
@@ -663,6 +689,12 @@ function DashboardPage({
                   >
                     <ActivityIcon size={12} /> Pipeline Timeline
                   </button>
+                  <button
+                    className={`view-mode-btn ${viewMode === 'audit' ? 'active' : ''}`}
+                    onClick={() => setViewMode('audit')}
+                  >
+                    <ClipboardListIcon size={12} /> Audit & Events ({auditEvents.length + runEvents.length})
+                  </button>
                 </div>
               </div>
 
@@ -751,6 +783,61 @@ function DashboardPage({
                     </div>
                   )}
                 </>
+              )}
+
+              {/* Audit & Event Stream View */}
+              {viewMode === 'audit' && (
+                <div className="audit-panel">
+                  <div className="audit-section">
+                    <div className="compact-section-heading">
+                      <strong>Incident Audit Ledger</strong>
+                      <span>{auditEvents.length} entries</span>
+                    </div>
+                    {auditEvents.length === 0 ? (
+                      <p className="audit-empty">No audit trail entries recorded yet.</p>
+                    ) : (
+                      <div className="audit-list">
+                        {auditEvents.map((ev) => (
+                          <div key={ev.id} className="audit-row">
+                            <div className="audit-row-head">
+                              <span className="audit-type">{ev.event_type}</span>
+                              <span className="audit-actor">by {ev.actor}</span>
+                              <time>{new Date(ev.created_at).toLocaleTimeString()}</time>
+                            </div>
+                            {ev.details_json && (
+                              <pre className="audit-details">{JSON.stringify(ev.details_json)}</pre>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="audit-section">
+                    <div className="compact-section-heading">
+                      <strong>Persisted SSE Run Stream</strong>
+                      <span>{runEvents.length} events</span>
+                    </div>
+                    {runEvents.length === 0 ? (
+                      <p className="audit-empty">Start an investigation to record stream events.</p>
+                    ) : (
+                      <div className="audit-list">
+                        {runEvents.map((ev) => (
+                          <div key={ev.id} className="audit-row">
+                            <div className="audit-row-head">
+                              <span className="audit-seq">#{ev.sequence}</span>
+                              <span className="audit-type">{ev.event_type}</span>
+                              <time>{new Date(ev.created_at).toLocaleTimeString()}</time>
+                            </div>
+                            {ev.payload_json && (
+                              <pre className="audit-details">{JSON.stringify(ev.payload_json)}</pre>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {/* Run result */}

@@ -2756,6 +2756,72 @@ body::before {
   color: var(--accent-primary);
 }
 
+/* Audit & Event Stream tab */
+.audit-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+.audit-section {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: rgba(10, 15, 14, .7);
+  padding: .9rem 1rem;
+}
+.audit-empty {
+  font-size: .74rem;
+  color: var(--text-muted);
+  padding: .4rem 0;
+}
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.audit-row {
+  padding: .55rem .7rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+.audit-row-head {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .7rem;
+}
+.audit-row-head time {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: .62rem;
+}
+.audit-type {
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+.audit-actor {
+  color: var(--text-secondary);
+}
+.audit-seq {
+  padding: .1rem .35rem;
+  border-radius: 4px;
+  background: rgba(167, 244, 93, .12);
+  color: var(--accent-primary);
+  font: 600 .62rem var(--font-mono);
+}
+.audit-details {
+  margin-top: .35rem;
+  font-family: var(--font-mono);
+  font-size: .62rem;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 @media (max-width: 1080px) {
   .system-flow { grid-template-columns: 1fr; gap: .6rem; }
   .flow-arrow { display: none; }
