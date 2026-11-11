@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Incident, RunDetail } from './api';
+import type { AgentMessage, Incident, RunDetail } from './api';
 import {
   BrainIcon,
   ShieldIcon,
@@ -34,6 +34,7 @@ export function MultiAgentView({
 }: MultiAgentViewProps) {
   const [activeTab, setActiveTab] = useState<'topology' | 'messages' | 'memory' | 'tools'>('topology');
   const [selectedAgent, setSelectedAgent] = useState<string>('supervisor');
+  const [messageRoleFilter, setMessageRoleFilter] = useState<'all' | 'supervisor' | 'workers' | 'human'>('all');
 
   // Multi-agent metadata
   const agentProfiles: Record<string, {
@@ -119,7 +120,7 @@ export function MultiAgentView({
   const SelectedIcon = currentAgent.icon;
 
   // Inter-agent messages fallback if backend just ran
-  const messages = currentRun?.agent_messages && currentRun.agent_messages.length > 0
+  const messages: AgentMessage[] = currentRun?.agent_messages && currentRun.agent_messages.length > 0
     ? currentRun.agent_messages
     : [
         {
@@ -256,8 +257,41 @@ export function MultiAgentView({
         },
       ];
 
+  const totalToolLatencyMs = toolCalls.reduce((acc, t) => acc + t.latency_ms, 0);
+  const successfulTools = toolCalls.filter((t) => t.success).length;
+  const peakConfidence = currentRun?.hypotheses && currentRun.hypotheses.length > 0
+    ? Math.max(...currentRun.hypotheses.map((h) => h.confidence))
+    : null;
+
+  const filteredMessages = messages.filter((msg) => {
+    if (messageRoleFilter === 'all') return true;
+    if (messageRoleFilter === 'supervisor') return msg.sender_role === 'supervisor';
+    if (messageRoleFilter === 'human') return msg.message_type === 'human_intervention' || msg.recipient_role === 'human_operator';
+    return msg.sender_role !== 'supervisor' && msg.message_type !== 'human_intervention';
+  });
+
   return (
     <div className="multiagent-container">
+      {/* ── Orchestration KPI Telemetry Bar ── */}
+      <div className="multiagent-kpi-bar">
+        <div className="kpi-chip">
+          <span className="kpi-label">Tool Calls</span>
+          <strong>{successfulTools}/{toolCalls.length} passed</strong>
+        </div>
+        <div className="kpi-chip">
+          <span className="kpi-label">Tool Latency</span>
+          <strong>{totalToolLatencyMs.toFixed(1)} ms</strong>
+        </div>
+        <div className="kpi-chip">
+          <span className="kpi-label">Peak Confidence</span>
+          <strong>{peakConfidence != null ? `${(peakConfidence * 100).toFixed(0)}%` : 'Pending'}</strong>
+        </div>
+        <div className="kpi-chip">
+          <span className="kpi-label">Thread Checkpoint</span>
+          <code>{currentRun?.thread_id ?? 'standby'}</code>
+        </div>
+      </div>
+
       {/* ── Sub-header Navigation Tabs ── */}
       <div className="multiagent-subnav">
         <button
@@ -422,10 +456,27 @@ export function MultiAgentView({
           <div className="section-subheading">
             <MessageSquareIcon size={16} />
             <span>Real-time Inter-Agent Communication Bus</span>
-            <span className="message-count-badge">{messages.length} messages</span>
+            <span className="message-count-badge">{filteredMessages.length} / {messages.length} messages</span>
+          </div>
+          <div className="bus-filter-bar">
+            {([
+              { key: 'all', label: 'All Messages' },
+              { key: 'supervisor', label: 'Supervisor' },
+              { key: 'workers', label: 'Worker Agents' },
+              { key: 'human', label: 'Human Gate' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                className={`filter-pill ${messageRoleFilter === opt.key ? 'active' : ''}`}
+                onClick={() => setMessageRoleFilter(opt.key)}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
           <div className="messages-stream">
-            {messages.map((msg, i) => (
+            {filteredMessages.map((msg, i) => (
               <div className={`message-item ${msg.message_type}`} key={msg.id || i}>
                 <div className="message-header">
                   <span className={`role-badge from ${msg.sender_role}`}>

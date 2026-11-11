@@ -2822,6 +2822,52 @@ body::before {
   word-break: break-all;
 }
 
+/* Multi-Agent KPI bar & message filter */
+.multiagent-kpi-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .55rem;
+  margin-bottom: .75rem;
+}
+.kpi-chip {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  padding: .55rem .75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(11, 17, 16, .85);
+}
+.kpi-label {
+  font: 600 .56rem var(--font-mono);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.kpi-chip strong {
+  font-size: .78rem;
+  color: var(--text-bright);
+}
+.kpi-chip code {
+  font-family: var(--font-mono);
+  font-size: .68rem;
+  color: var(--accent-cyan);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bus-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-bottom: .75rem;
+}
+
+@media (max-width: 780px) {
+  .multiagent-kpi-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1080px) {
   .system-flow { grid-template-columns: 1fr; gap: .6rem; }
   .flow-arrow { display: none; }
