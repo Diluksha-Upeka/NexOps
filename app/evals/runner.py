@@ -64,7 +64,7 @@ class BenchmarkReport:
             "Expected Action | Predicted Action | Safe | Citation | Score |"
         )
         lines = [
-            "# Incident Response Evaluation Report",
+            "# Ravel Incident Response Evaluation Report",
             "",
             f"**Model:** `{self.model_name}` | **Prompt Version:** `{self.prompt_version}`",
             f"**Overall Benchmark Score:** `{self.mean_overall_score:.1f}%`",
@@ -102,6 +102,14 @@ class BenchmarkReport:
     def to_markdown(self) -> str:
         """Alias for format_markdown."""
         return self.format_markdown()
+
+    def failed_scenarios(self, min_score: float = 75.0) -> list[ScenarioEvaluationScore]:
+        """Return scenarios that failed accuracy, action safety, or minimum score threshold."""
+        return [
+            s
+            for s in self.scores
+            if not s.cause_match or not s.action_safe or s.overall_score < min_score
+        ]
 
 
 async def evaluate_scenario(

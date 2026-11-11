@@ -80,7 +80,8 @@ async def test_benchmark_report_markdown() -> None:
     report: BenchmarkReport = await run_evaluations(adapter=adapter)
     markdown = report.to_markdown()
 
-    assert "# Incident Response Evaluation Report" in markdown
+    assert "# Ravel Incident Response Evaluation Report" in markdown
+    assert report.failed_scenarios() == []
     assert "**Model:** `fake-incident-reasoner-v1`" in markdown
     assert "**Prompt Version:** `1.0.0`" in markdown
     assert "| Scenario | Expected Cause | Predicted Cause |" in markdown
@@ -100,3 +101,4 @@ async def test_eval_handles_failing_model_gracefully() -> None:
     # Only ambiguous_jitter expects 'unknown'
     assert report.cause_accuracy <= 20.0
     assert report.mean_overall_score < 50.0
+    assert len(report.failed_scenarios()) >= 4
