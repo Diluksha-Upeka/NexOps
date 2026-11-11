@@ -2700,6 +2700,62 @@ body::before {
 .multiagent-subnav { gap: .25rem; }
 .multiagent-tab-btn { white-space: nowrap; }
 
+/* Incident queue filter toolbar */
+.incident-filter-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+  padding: .7rem .85rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(13, 19, 18, .65);
+}
+.incident-search-box {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .38rem .65rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+.incident-search-box:focus-within {
+  border-color: var(--border-accent);
+  color: var(--text-primary);
+}
+.incident-search-box input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: 500 .72rem var(--font-body);
+}
+.incident-filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+}
+.filter-pill {
+  padding: .22rem .55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font: 600 .62rem var(--font-mono);
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.filter-pill:hover {
+  border-color: var(--border-accent);
+  color: var(--text-bright);
+}
+.filter-pill.active {
+  border-color: var(--accent-primary);
+  background: rgba(167, 244, 93, .12);
+  color: var(--accent-primary);
+}
+
 @media (max-width: 1080px) {
   .system-flow { grid-template-columns: 1fr; gap: .6rem; }
   .flow-arrow { display: none; }

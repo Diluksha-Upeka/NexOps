@@ -460,8 +460,25 @@ function DashboardPage({
 }: DashboardProps) {
   const [simScenario, setSimScenario] = useState('db_conn_exhaustion');
   const [viewMode, setViewMode] = useState<'multiagent' | 'timeline'>('multiagent');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'investigating' | 'resolved'>('all');
 
-  const sorted = [...incidents].sort(
+  const query = searchQuery.trim().toLowerCase();
+  const filtered = incidents.filter((incident) => {
+    const matchesStatus =
+      statusFilter === 'all'
+      || (statusFilter === 'investigating'
+        ? ['investigating', 'awaiting_approval', 'remediating', 'verifying'].includes(incident.status)
+        : incident.status === statusFilter);
+    const matchesQuery =
+      !query
+      || incident.title.toLowerCase().includes(query)
+      || incident.service.toLowerCase().includes(query)
+      || (incident.scenario_key ?? '').toLowerCase().includes(query);
+    return matchesStatus && matchesQuery;
+  });
+
+  const sorted = [...filtered].sort(
     (a, b) => (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3),
   );
 
@@ -523,14 +540,42 @@ function DashboardPage({
             </span>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{openCount + investigatingCount} active</span>
           </div>
+          <div className="incident-filter-toolbar">
+            <div className="incident-search-box">
+              <SearchIcon size={13} />
+              <input
+                type="search"
+                placeholder="Filter by title or service…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Filter incidents"
+              />
+            </div>
+            <div className="incident-filter-pills">
+              {(['all', 'open', 'investigating', 'resolved'] as const).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  className={`filter-pill ${statusFilter === status ? 'active' : ''}`}
+                  onClick={() => setStatusFilter(status)}
+                >
+                  {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
           {sorted.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon"><InboxIcon size={48} /></div>
-              <p>No incidents yet.<br />Seed demo data to get started.</p>
+              <p>
+                {incidents.length === 0
+                  ? <>No incidents yet.<br />Seed demo data to get started.</>
+                  : 'No incidents match this filter.'}
+              </p>
             </div>
           ) : (
             <ul className="incident-list">
-              {sorted.slice(0, 6).map((incident) => (
+              {sorted.slice(0, 8).map((incident) => (
                 <li
                   key={incident.id}
                   className={`incident-row ${selectedIncident?.id === incident.id ? 'selected' : ''}`}
