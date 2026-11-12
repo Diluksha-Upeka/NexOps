@@ -33,7 +33,9 @@ def test_agent_registry_defines_all_specialized_roles() -> None:
         assert profile.system_prompt
 
     assert AgentCapability.SYNTHESIS in AGENT_REGISTRY[AgentRole.SUPERVISOR].capabilities
-    assert AgentCapability.SAFETY_VALIDATION in AGENT_REGISTRY[AgentRole.SAFETY_OFFICER].capabilities
+    assert (
+        AgentCapability.SAFETY_VALIDATION in AGENT_REGISTRY[AgentRole.SAFETY_OFFICER].capabilities
+    )
 
 
 def test_incident_memory_store_short_and_long_term() -> None:
