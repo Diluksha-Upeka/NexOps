@@ -237,18 +237,17 @@ npm run dev
 ### 6. Interactive Demo Walkthrough
 
 1. Open North Market at **[http://localhost:5174](http://localhost:5174)** and use its product/order CRUD.
-2. Inject a ShopAPI fault from Ravel, then refresh the shop to experience the customer impact.
-3. Return to **[http://localhost:5173](http://localhost:5173)**. Ravel automatically discovers the incident and starts the multi-agent investigation.
-3. Click **"Run Investigation"**:
-   - Watch the LangGraph state machine execute parallel queries for logs, metrics, traces, and deploy events.
-   - Inspect the synthesized root cause hypothesis with verifiable evidence citations.
-4. Review the proposed remediation: `SCALE_UP_REPLICAS` (or `RESTART_SERVICE`).
-5. Notice that execution has **paused at a durable interrupt**. The state is safely persisted in PostgreSQL.
+2. Inject a ShopAPI fault from Ravel (or experience a fault from North Market), then refresh the shop to observe customer impact.
+3. Return to **[http://localhost:5173](http://localhost:5173)** and click **"Investigate"** (or inspect live auto-reported incidents):
+   - Watch the **Agent Graph** stream real-time LangGraph SSE events across Logs, Metrics, Traces, and Changes workers.
+   - Review the synthesized root cause hypothesis, long-term memory matches, tool telemetry bar, and **Audit & Events** ledger.
+4. Review the proposed remediation (`DISABLE_FAULT` or `ROLLBACK_RELEASE`) at the **Approval Gate**.
+5. Notice that execution has **paused at a durable interrupt** persisted in PostgreSQL checkpoints.
 6. Click **"Approve Action"**:
    - The graph resumes from its checkpoint.
    - The remediation executor updates the ShopAPI simulator sandbox.
-   - The post-action verification probe executes automatically, checking response latencies.
-   - The incident transitions to **`RESOLVED`**.
+   - The post-action verification probe confirms service latency and error recovery.
+   - The incident transitions cleanly to **`RESOLVED`**.
 
 ---
 
@@ -323,18 +322,21 @@ Ravel is designed with defense-in-depth principles for AI agent systems:
 All automated tests, linters, and type checkers run cleanly:
 
 ```bash
-# Run unit test suite (145 tests)
+# Run unit test suite (156 tests)
 uv run pytest tests/unit/
 
 # Run linter and formatting check
 uv run ruff check .
 uv run ruff format --check .
 
-# Run strict type checking (48 files)
+# Run strict type checking (49 source files)
 uv run mypy app/
 
 # Run frontend build and typecheck
 cd frontend && npm run build
+
+# Run Shop storefront build
+cd frontend/shop-app && npm run build
 ```
 
 ---
