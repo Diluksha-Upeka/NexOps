@@ -52,7 +52,11 @@ export default function App() {
       const [catalog, orderData] = await Promise.all([request<{ items: Product[] }>('/products'), request<{ items: Order[] }>('/orders')]);
       const elapsed = Math.round(performance.now() - started);
       setProducts(catalog.items); setOrders(orderData.items); setLatency(elapsed);
-      if (elapsed > 800) void reportIncident('latency', `GET /shopapi/products took ${elapsed} ms`);
+      if (elapsed > 800) {
+        void reportIncident('latency', `GET /shopapi/products took ${elapsed} ms`);
+      } else {
+        reportedIncident = false;
+      }
     } catch (reason) { setLatency(Math.round(performance.now() - started)); setError(reason instanceof Error ? reason.message : 'Unavailable'); }
     finally { setBusy(false); }
   }, []);
@@ -80,7 +84,7 @@ export default function App() {
     <main>
       {view === 'catalog' && <><section className="hero"><span>LIVE COMMERCE DEMO</span><h1>Simple goods.<br/><em>Real API calls.</em></h1><p>Every click reaches ShopAPI. Inject an incident in Ravel and the customer impact appears here.</p></section>{error ? <Failure error={error} latency={latency} retry={load}/> : <div className="grid">{products.map((p, i) => <article key={p.id}><div className={`art a${i % 4}`}>{['◇','○','△','□'][i % 4]}</div><section><div><b>{p.name}</b><small>{p.category} · {p.stock} left</small></div><strong>${Number(p.price).toFixed(2)}</strong></section><button disabled={!p.stock} onClick={() => setCart((items) => [...items, p])}>Add to bag</button></article>)}</div>}</>}
       {view === 'manage' && <section className="workspace"><div><span>CATALOG CRUD</span><h1>{editing ? 'Edit product' : 'New product'}</h1><p>Create and update inventory through the real ShopAPI.</p><form onSubmit={saveProduct}>{(['name','description','category'] as const).map((key) => <label key={key}>{key}<input value={draft[key]} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} required={key !== 'description'}/></label>)}<div className="pair"><label>price<input type="number" min="0.01" step="0.01" value={draft.price} onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })}/></label><label>stock<input type="number" min="0" value={draft.stock} onChange={(e) => setDraft({ ...draft, stock: Number(e.target.value) })}/></label></div><button disabled={busy}>{editing ? 'Save changes' : 'Create product'}</button>{editing && <button type="button" className="ghost" onClick={() => { setEditing(null); setDraft(emptyDraft); }}>Cancel</button>}</form></div><div className="table"><h2>Products <span>{products.length}</span></h2>{products.map((p) => <div className="row" key={p.id}><div><b>{p.name}</b><small>{p.stock} in stock · ${p.price}</small></div><button onClick={() => editProduct(p)}>Edit</button><button className="danger" onClick={() => void deleteProduct(p.id)}>Delete</button></div>)}</div></section>}
-      {view === 'orders' && <section className="orders"><div><span>ORDER CRUD</span><h1>Orders</h1><p>Read, update, and delete customer orders.</p></div><div className="table">{orders.length === 0 && <div className="empty">No orders yet.</div>}{orders.map((o) => <div className="order" key={o.id}><div><b>#{o.id.slice(0,8)}</b><small>{o.customer_email} · ${o.total}</small></div><select value={o.status} onChange={(e) => void updateOrder(o.id, e.target.value)}><option>pending</option><option>confirmed</option><option>shipped</option><option>cancelled</option></select><button className="danger" onClick={() => void deleteOrder(o.id)}>Delete</button></div>)}</div></section>}
+      {view === 'orders' && <section className="orders"><div><span>ORDER CRUD</span><h1>Orders</h1><p>Read, update, and delete customer orders.</p></div><div className="table">{orders.length === 0 && <div className="empty">No orders yet.</div>}{orders.map((o) => <div className="order" key={o.id}><div><b>#{o.id.slice(0,8)}</b><small>{o.customer_email} · {o.items?.length ?? 0} item(s) · ${o.total}</small></div><select value={o.status} onChange={(e) => void updateOrder(o.id, e.target.value)}><option>pending</option><option>confirmed</option><option>shipped</option><option>cancelled</option></select><button className="danger" onClick={() => void deleteOrder(o.id)}>Delete</button></div>)}</div></section>}
     </main>
   </div>;
 }
